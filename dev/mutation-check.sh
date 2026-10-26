@@ -23,6 +23,11 @@ if s.count(old) != 1:
     sys.exit("snippet not found exactly once in " + path)
 open(path, "w", encoding="utf-8", newline="\n").write(s.replace(old, new))
 PY
+	if [ $? -ne 0 ]; then
+		mv "$file.orig" "$file"
+		echo "ERROR     $5 -> snippet not found; mutation not applied"
+		return
+	fi
 	reset_opcache
 	result=$(sh dev/run-tests.sh --filter "$4" 2>&1 | grep -E "^(OK|Tests:)")
 	mv "$file.orig" "$file"
@@ -50,8 +55,8 @@ mutate class-editor-guard.php \
 	"		if ( false ) {" \
 	"test_stale_editor" "no stale-editor guard"
 mutate class-table-updater.php \
-	"		} elseif ( self::is_partial_write( \$current, \$journal, true ) ) {" \
-	"		} elseif ( true ) {" \
+	"		} elseif ( self::is_partial_write( \$current, \$journal, true )" \
+	"		} elseif ( true" \
 	"IntegrityGuardsTest|RecoveryTest" "restore any outdated journal"
 mutate class-tablepress-adapter.php \
 	"		if ( self::post_type() !== \$snapshot['post_type'] || json_decode( (string) \$snapshot['post_content'], true ) !== \$table['data'] ) {" \
