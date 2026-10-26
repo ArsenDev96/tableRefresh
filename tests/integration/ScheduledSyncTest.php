@@ -1,0 +1,289 @@
+<?php
+/**
+ * Configured automatic synchronization: configuration, WP-Cron events, history, pausing.
+ *
+ * @package TableRefresh
+ */
+
+use TableRefresh\Editor_Guard;
+use TableRefresh\Plugin;
+use TableRefresh\Scheduler;
+use TableRefresh\Sync_Config;
+use TableRefresh\Sync_Log;
+use TableRefresh\Sync_Runner;
+use TableRefresh\Sync_State;
+use TableRefresh\Table_Lock;
+use TableRefresh\TablePress_Adapter;
+
+/**
+ * @covers \TableRefresh\Sync_Config
+ * @covers \TableRefresh\Sync_Log
+ * @covers \TableRefresh\Sync_Runner
+ * @covers \TableRefresh\Scheduler
+ */
+class ScheduledSyncTest extends Integration_Test_Case {
+
+	const V1 = "Item,Price\nApple,1\nPear,2\n";
+	const V2 = "Item,Price\nApple,1\nPear,3\n";
+
+	/**
+	 * Table posts configured by the current test.
+	 *
+	 * @var int[]
+	 */
+	private array $configured = array();
+
+	protected function tearDown(): void {
+		foreach ( $this->configured as $post_id ) {
+			wp_clear_scheduled_hook( Scheduler::HOOK, array( $post_id ) );
+			Sync_Config::delete( $post_id );
+		}
+		parent::tearDown();
+	}
+
+	/**
+	 * Creates a table and configures automatic sync for it, like the admin screen does.
+	 *
+	 * @param string $url       Source URL.
+	 * @param string $frequency Frequency.
+	 * @return array{0: string, 1: int} Table ID and post ID.
+	 */
+	private function configured_table( string $url, string $frequency = 'daily' ): array {
+		$table_id = $this->create_table( array( array( 'initial' ) ) );
+		$post_id  = TablePress_Adapter::get_post_id( $table_id );
+		$config   = array(
+			'url'       => $url,
+			'frequency' => $frequency,
+			'enabled'   => true,
+		);
+		Sync_Config::save( $post_id, $config );
+		Scheduler::apply( $post_id, Sync_Config::get( $post_id ) );
+		$this->configured[] = $post_id;
+		return array( $table_id, $post_id );
+	}
+
+	private function run_scheduled( int $post_id ): void {
+		do_action( Scheduler::HOOK, $post_id ); // What WP-Cron calls.
+	}
+
+	private function edit_in_tablepress( string $table_id, string $value ): void {
+		$table               = $this->load_table( $table_id );
+		$table['data'][1][1] = $value;
+		wp_set_current_user( 1 );
+		$this->assertNotInstanceOf( WP_Error::class, TablePress::$model_table->save( $table ) );
+		wp_set_current_user( 0 );
+	}
+
+	public function test_configuration_round_trip_and_url_validation() {
+		list( , $post_id ) = $this->configured_table( 'https://docs.google.com/spreadsheets/d/abc/edit#gid=0', 'weekly' );
+		$config            = Sync_Config::get( $post_id );
+		$this->assertSame( 'weekly', $config['frequency'] );
+		$this->assertTrue( $config['enabled'] );
+		$this->assertSame( '', $config['attention'] );
+		$this->assertSame( 'Google Sheets', Sync_Config::source_label( $config['url'] ) );
+		$this->assertSame( 'example.com', Sync_Config::source_label( 'https://example.com/a.csv' ) );
+		$this->assertArrayHasKey( $post_id, Sync_Config::all() );
+
+		$this->assertSame( 'https://example.com/a.csv', Sync_Config::validate_url( '  https://example.com/a.csv ' ) );
+		foreach ( array( '', 'example.com/a.csv', 'ftp://example.com/a.csv', 'javascript:alert(1)', 'https://exa mple.com/', 'https://user:pw@example.com/a.csv', 'https://' . str_repeat( 'a', 2050 ) ) as $invalid ) {
+			$this->assertInstanceOf( WP_Error::class, Sync_Config::validate_url( $invalid ), $invalid );
+		}
+	}
+
+	public function test_exactly_one_event_follows_the_configuration() {
+		list( , $post_id ) = $this->configured_table( $this->fixture( 's.csv', self::V1 ) );
+		$this->assertSame( 1, Scheduler::count_events( $post_id ) );
+		$this->assertSame( 'daily', wp_get_scheduled_event( Scheduler::HOOK, array( $post_id ) )->schedule );
+		$this->assertGreaterThan( time() + DAY_IN_SECONDS - 60, Scheduler::next_run( $post_id ), 'The first automatic sync is one interval after setup.' );
+
+		Scheduler::apply( $post_id, Sync_Config::get( $post_id ) );
+		$this->assertSame( 1, Scheduler::count_events( $post_id ), 'Applying twice must not add an event.' );
+
+		$config              = Sync_Config::get( $post_id );
+		$config['frequency'] = 'hourly';
+		Sync_Config::save( $post_id, $config );
+		Scheduler::apply( $post_id, Sync_Config::get( $post_id ) );
+		$this->assertSame( 1, Scheduler::count_events( $post_id ) );
+		$this->assertSame( 'hourly', wp_get_scheduled_event( Scheduler::HOOK, array( $post_id ) )->schedule );
+
+		$config['enabled'] = false;
+		Sync_Config::save( $post_id, $config );
+		Scheduler::apply( $post_id, Sync_Config::get( $post_id ) );
+		$this->assertSame( 0, Scheduler::count_events( $post_id ) );
+
+		// Duplicates and events of unconfigured tables are removed; missing events are added.
+		$config['enabled'] = true;
+		Sync_Config::save( $post_id, $config );
+		wp_schedule_event( time() + 100, 'hourly', Scheduler::HOOK, array( $post_id ) );
+		wp_schedule_event( time() + 200, 'daily', Scheduler::HOOK, array( $post_id ) );
+		wp_schedule_event( time() + 300, 'daily', Scheduler::HOOK, array( 999999999 ) );
+		Scheduler::reconcile();
+		$this->assertSame( 1, Scheduler::count_events( $post_id ) );
+		$this->assertSame( 'hourly', wp_get_scheduled_event( Scheduler::HOOK, array( $post_id ) )->schedule );
+		$this->assertSame( 0, Scheduler::count_events( 999999999 ) );
+	}
+
+	public function test_scheduled_sync_updates_the_table_and_records_history() {
+		$url                      = $this->fixture( 's.csv', self::V1 );
+		list( $table_id, $post_id ) = $this->configured_table( $url );
+
+		$this->run_scheduled( $post_id );
+		$this->assertSame( array( array( 'Item', 'Price' ), array( 'Apple', '1' ), array( 'Pear', '2' ) ), $this->load_table( $table_id )['data'] );
+		$this->run_scheduled( $post_id );
+
+		$log = Sync_Log::get( $post_id );
+		$this->assertCount( 2, $log['entries'] );
+		$this->assertSame( 'unchanged', $log['entries'][0]['outcome'], 'Newest entry first.' );
+		$this->assertSame( 'updated', $log['entries'][1]['outcome'] );
+		$this->assertSame( 'scheduled', $log['entries'][1]['trigger'] );
+		$this->assertSame( 3, $log['entries'][1]['rows'] );
+		$this->assertSame( 2, $log['entries'][1]['columns'] );
+		$this->assertSame( $log['entries'][0]['time'], $log['last_success'] );
+		$this->assertStringNotContainsString( 'fixtures', (string) get_post_meta( $post_id, Sync_Log::META_KEY, true ), 'The history must not contain the source URL.' );
+		$this->assertSame( 1, Scheduler::count_events( $post_id ), 'The schedule continues.' );
+	}
+
+	public function test_manual_edit_pauses_automatic_sync_until_an_administrator_replaces_it() {
+		$url                        = $this->fixture( 's.csv', self::V1 );
+		list( $table_id, $post_id ) = $this->configured_table( $url );
+		$this->run_scheduled( $post_id );
+		$this->edit_in_tablepress( $table_id, 'HUMAN' );
+		$this->fixture( 's.csv', self::V2 );
+		$before = $this->raw_state( $table_id );
+
+		$this->run_scheduled( $post_id );
+		$this->assertSame( 'conflict', Sync_Log::last( $post_id )['outcome'] );
+		$this->assertSame( Sync_Config::ATTENTION_CONFLICT, Sync_Config::get( $post_id )['attention'] );
+		$this->assertSame( 0, Scheduler::count_events( $post_id ), 'Automatic sync is paused.' );
+		$this->assertSame( $before, $this->raw_state( $table_id ), 'The manual edit is kept.' );
+
+		// A cron event that was already due does nothing and is not recorded.
+		$this->run_scheduled( $post_id );
+		$this->assertCount( 2, Sync_Log::get( $post_id )['entries'] );
+		$this->assertSame( 0, Scheduler::count_events( $post_id ) );
+
+		// "Sync now" still refuses to overwrite the edit.
+		$this->assertSame( 'conflict', ( new Sync_Runner() )->run( $post_id, 'manual' )['outcome'] );
+		$this->assertSame( 'HUMAN', $this->load_table( $table_id )['data'][1][1] );
+
+		// The administrator chooses to replace the edit with the source data.
+		$result = ( new Sync_Runner() )->run( $post_id, 'replace' );
+		$this->assertSame( 'updated', $result['outcome'], $result['message'] );
+		$this->assertSame( '3', $this->load_table( $table_id )['data'][2][1] );
+		$this->assertSame( '1', $this->load_table( $table_id )['data'][1][1] );
+		$this->assertSame( '', Sync_Config::get( $post_id )['attention'] );
+		$this->assertSame( 1, Scheduler::count_events( $post_id ), 'Automatic sync resumes.' );
+	}
+
+	public function test_open_editor_is_retried_at_the_next_scheduled_time() {
+		$url                        = $this->fixture( 's.csv', self::V1 );
+		list( $table_id, $post_id ) = $this->configured_table( $url );
+		$this->run_scheduled( $post_id );
+		TablePress_Adapter::write_meta( $post_id, Editor_Guard::META_PREFIX . '1', Sync_State::now() ); // admin opened the editor.
+		$this->fixture( 's.csv', self::V2 );
+
+		$this->run_scheduled( $post_id );
+		$last = Sync_Log::last( $post_id );
+		$this->assertSame( 'conflict', $last['outcome'] );
+		$this->assertStringContainsString( 'admin', $last['message'], 'Who has the table open.' );
+		$this->assertSame( '', Sync_Config::get( $post_id )['attention'], 'An open editor does not pause automatic sync.' );
+		$this->assertSame( 0, Sync_Config::get( $post_id )['failures'] );
+		$this->assertSame( 1, Scheduler::count_events( $post_id ) );
+		$this->assertSame( '2', $this->load_table( $table_id )['data'][2][1] );
+	}
+
+	public function test_automatic_sync_pauses_after_repeated_failures() {
+		list( $table_id, $post_id ) = $this->configured_table( TABLEREFRESH_TESTS_FIXTURE_URL . '/status?code=404' );
+		$before                     = $this->raw_state( $table_id );
+
+		for ( $i = 1; $i < Sync_Runner::MAX_FAILURES; $i++ ) {
+			$this->run_scheduled( $post_id );
+			$this->assertSame( 1, Scheduler::count_events( $post_id ), "Still scheduled after {$i} failures." );
+		}
+		$this->run_scheduled( $post_id );
+		$config = Sync_Config::get( $post_id );
+		$this->assertSame( Sync_Config::ATTENTION_FAILURES, $config['attention'] );
+		$this->assertSame( Sync_Runner::MAX_FAILURES, $config['failures'] );
+		$this->assertSame( 0, Scheduler::count_events( $post_id ), 'No endless retries.' );
+		$this->assertStringContainsString( 'paused', Sync_Log::last( $post_id )['message'] );
+		$this->assertSame( $before, $this->raw_state( $table_id ) );
+
+		// The administrator fixes the source; a successful sync resumes the schedule.
+		$config['url'] = $this->fixture( 's.csv', self::V1 );
+		Sync_Config::save( $post_id, $config );
+		$this->assertSame( 'updated', ( new Sync_Runner() )->run( $post_id, 'manual' )['outcome'] );
+		$this->assertSame( 0, Sync_Config::get( $post_id )['failures'] );
+		$this->assertSame( 1, Scheduler::count_events( $post_id ) );
+	}
+
+	public function test_sync_of_a_busy_table_is_not_recorded() {
+		list( $table_id, $post_id ) = $this->configured_table( $this->fixture( 's.csv', self::V1 ) );
+		$lock                       = Table_Lock::acquire( $table_id );
+		$this->assertInstanceOf( Table_Lock::class, $lock );
+		try {
+			$this->assertSame( 'busy', ( new Sync_Runner() )->run( $post_id, 'manual' )['outcome'] );
+		} finally {
+			$lock->release();
+		}
+		$this->assertSame( array(), Sync_Log::get( $post_id )['entries'] );
+		$this->assertSame( 0, Sync_Config::get( $post_id )['failures'] );
+	}
+
+	public function test_history_is_bounded() {
+		list( , $post_id ) = $this->configured_table( $this->fixture( 's.csv', self::V1 ) );
+		for ( $i = 0; $i < Sync_Log::MAX_ENTRIES + 3; $i++ ) {
+			( new Sync_Runner() )->run( $post_id, 'manual' );
+		}
+		$log = Sync_Log::get( $post_id );
+		$this->assertCount( Sync_Log::MAX_ENTRIES, $log['entries'] );
+		$this->assertSame( 'unchanged', $log['entries'][0]['outcome'] );
+		$this->assertSame( 'unchanged', $log['entries'][ Sync_Log::MAX_ENTRIES - 1 ]['outcome'], 'The oldest entries were dropped.' );
+	}
+
+	public function test_deleting_the_table_removes_its_configuration_and_event() {
+		list( $table_id, $post_id ) = $this->configured_table( $this->fixture( 's.csv', self::V1 ) );
+		$this->assertTrue( TablePress::$model_table->delete( $table_id ) );
+		$this->assertSame( 0, Scheduler::count_events( $post_id ) );
+		$this->assertNull( Sync_Config::get( $post_id ) );
+		$this->assertSame( 'missing', ( new Sync_Runner() )->run( $post_id, 'scheduled' )['outcome'] );
+	}
+
+	public function test_deactivation_keeps_configurations_and_activation_restores_events() {
+		list( , $post_id ) = $this->configured_table( $this->fixture( 's.csv', self::V1 ), 'hourly' );
+		Plugin::deactivate();
+		$this->assertSame( 0, Scheduler::count_events( $post_id ) );
+		$this->assertNotNull( Sync_Config::get( $post_id ) );
+		Plugin::activate();
+		$this->assertSame( 1, Scheduler::count_events( $post_id ) );
+		$this->assertSame( 'hourly', wp_get_scheduled_event( Scheduler::HOOK, array( $post_id ) )->schedule );
+	}
+
+	public function test_due_event_runs_through_wp_cron() {
+		list( $table_id, $post_id ) = $this->configured_table( $this->fixture( 's.csv', self::V1 ), 'hourly' );
+		wp_clear_scheduled_hook( Scheduler::HOOK, array( $post_id ) );
+		wp_schedule_event( time() - 60, 'hourly', Scheduler::HOOK, array( $post_id ) ); // Overdue.
+
+		$output = shell_exec( 'wp --path=' . escapeshellarg( TABLEREFRESH_TESTS_WP_DIR ) . ' cron event run ' . Scheduler::HOOK . ' 2>&1' );
+		$this->assertStringContainsString( 'Executed', (string) $output );
+		wp_cache_flush(); // The other process changed the cron option and post meta.
+		$this->assertSame( 'Pear',$this->load_table( $table_id )['data'][2][0] );
+		$this->assertSame( 'scheduled', Sync_Log::last( $post_id )['trigger'] );
+		$this->assertSame( 1, Scheduler::count_events( $post_id ), 'WP-Cron rescheduled the event once.' );
+		$this->assertGreaterThan( time(), Scheduler::next_run( $post_id ) );
+	}
+
+	public function test_uninstall_removes_tablerefresh_data_but_not_the_table() {
+		list( $table_id, $post_id ) = $this->configured_table( $this->fixture( 's.csv', self::V1 ) );
+		( new Sync_Runner() )->run( $post_id, 'manual' );
+		$data = $this->load_table( $table_id )['data'];
+
+		$code = "define( 'WP_UNINSTALL_PLUGIN', 'tablerefresh/tablerefresh.php' ); include WP_PLUGIN_DIR . '/tablerefresh/uninstall.php';";
+		shell_exec( 'wp --path=' . escapeshellarg( TABLEREFRESH_TESTS_WP_DIR ) . ' eval ' . escapeshellarg( $code ) . ' 2>&1' );
+
+		wp_cache_flush();
+		global $wpdb;
+		$this->assertSame( 0, (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$wpdb->postmeta} WHERE post_id = %d AND meta_key LIKE %s", $post_id, $wpdb->esc_like( '_tablerefresh_' ) . '%' ) ) );
+		$this->assertFalse( wp_next_scheduled( Scheduler::HOOK, array( $post_id ) ) );
+		$this->assertSame( $data, $this->load_table( $table_id )['data'], 'The TablePress table is kept.' );
+	}
+}

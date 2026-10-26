@@ -119,12 +119,55 @@ final class TablePress_Adapter {
 	 * @return int Post ID, or 0 if unknown.
 	 */
 	public static function get_post_id( string $table_id ): int {
+		$tables = self::tables_map();
+		return isset( $tables['table_post'][ $table_id ] ) && is_numeric( $tables['table_post'][ $table_id ] ) ? (int) $tables['table_post'][ $table_id ] : 0;
+	}
+
+	/**
+	 * Returns the ID of the table stored in a post (the reverse of get_post_id()).
+	 *
+	 * The post ID stays the same when a table ID is changed in the TablePress editor.
+	 *
+	 * @param int $post_id Table post ID.
+	 * @return string Table ID, or '' if no table is stored in that post.
+	 */
+	public static function get_table_id( int $post_id ): string {
+		$tables = self::tables_map();
+		if ( $post_id <= 0 || ! isset( $tables['table_post'] ) || ! is_array( $tables['table_post'] ) ) {
+			return '';
+		}
+		$table_id = array_search( $post_id, array_map( 'intval', $tables['table_post'] ), true );
+		return false === $table_id ? '' : (string) $table_id;
+	}
+
+	/**
+	 * TablePress's map of table IDs to post IDs (see get_post_id()).
+	 *
+	 * @return array<string, mixed>
+	 */
+	private static function tables_map(): array {
 		if ( method_exists( \TablePress::$model_table, '_debug_get_tables' ) ) {
 			$tables = \TablePress::$model_table->_debug_get_tables();
 		} else {
 			$tables = json_decode( (string) get_option( 'tablepress_tables', '' ), true );
 		}
-		return isset( $tables['table_post'][ $table_id ] ) && is_numeric( $tables['table_post'][ $table_id ] ) ? (int) $tables['table_post'][ $table_id ] : 0;
+		return is_array( $tables ) ? $tables : array();
+	}
+
+	/**
+	 * IDs and names of all tables, without loading their data.
+	 *
+	 * @return array<string, string> Table ID => name.
+	 */
+	public static function list_tables(): array {
+		$tables = array();
+		foreach ( \TablePress::$model_table->load_all( false ) as $table_id ) {
+			$table = \TablePress::$model_table->load( (string) $table_id, false, false );
+			if ( is_array( $table ) ) {
+				$tables[ (string) $table_id ] = (string) $table['name'];
+			}
+		}
+		return $tables;
 	}
 
 	/**

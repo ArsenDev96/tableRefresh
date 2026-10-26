@@ -21,11 +21,26 @@ final class Plugin {
 		add_action( 'admin_notices', array( __CLASS__, 'maybe_show_dependency_notice' ) );
 		Editor_Guard::init();
 		Revision_Policy::init();
+		Scheduler::init();
 
 		if ( defined( 'WP_CLI' ) && WP_CLI ) {
 			require_once TABLEREFRESH_DIR . 'includes/class-cli-command.php';
 			\WP_CLI::add_command( 'tablerefresh', CLI_Command::class );
 		}
+	}
+
+	/**
+	 * Activation: restores the scheduled syncs of tables that are still configured.
+	 */
+	public static function activate(): void {
+		Scheduler::reconcile();
+	}
+
+	/**
+	 * Deactivation: removes all scheduled syncs. Configurations and history are kept.
+	 */
+	public static function deactivate(): void {
+		Scheduler::clear_all();
 	}
 
 	/**

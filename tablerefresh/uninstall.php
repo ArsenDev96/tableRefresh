@@ -19,7 +19,10 @@ $wpdb->query(
 	)
 );
 
-// Sync baselines and editor sessions stored on TablePress table posts.
+// Scheduled syncs (already removed on deactivation).
+wp_unschedule_hook( 'tablerefresh_scheduled_sync' );
+
+// Sync baselines, editor sessions, sync configurations, and history stored on TablePress table posts.
 // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 $wpdb->query(
 	$wpdb->prepare(
