@@ -58,7 +58,8 @@ services:
       - ./fixtures/data:/srv/data:ro
 
   cli: &cli
-    image: wordpress:cli
+    # CLI_IMAGE selects another PHP version for dev/test-matrix.sh (e.g. wordpress:cli-php8.1).
+    image: ${CLI_IMAGE:-wordpress:cli}
     profiles: ["cli"]
     user: "33:33"
     depends_on:

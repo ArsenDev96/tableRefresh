@@ -13,6 +13,10 @@ sh dev/redis.sh disable
 sh dev/mutation-check.sh                 # disables each protection; the tests must notice (Python: host, else fixtures container)
 sh dev/test-matrix.sh db                 # MariaDB 10.11/11.4, MySQL 5.7/8.0/8.4
 sh dev/test-matrix.sh tablepress 3.0 3.4.1   # TablePress releases from wordpress.org
+sh dev/test-matrix.sh wp 6.7.10 7.1.3        # WordPress versions
+sh dev/test-matrix.sh php 8.1 8.2 8.4        # PHP versions of WP-CLI/PHPUnit (web server: PHP 8.4)
+sh dev/build-zip.sh HEAD rc1                 # plugin ZIP from a commit, into dist/
+sh dev/rc-env.sh up                          # clean site on :8090 without the checkout; install ZIPs from /dist
 docker compose -f dev/docker-compose.yml down -v   # remove everything
 ```
 

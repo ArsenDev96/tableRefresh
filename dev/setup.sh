@@ -18,6 +18,9 @@ docker compose up -d --wait db wordpress fixtures
 until docker compose exec -T wordpress test -f /var/www/html/wp-config.php; do sleep 2; done
 
 WP="docker compose run --rm -T cli wp"
+if [ -n "${WP_VERSION:-}" ]; then # Another WordPress version for dev/test-matrix.sh.
+	$WP core download --version="$WP_VERSION" --force --skip-content
+fi
 $WP core is-installed 2>/dev/null || $WP core install --url=http://localhost:8089 --title="TableRefresh Dev" \
 	--admin_user=admin --admin_password=admin --admin_email=admin@example.test --skip-email
 $WP plugin activate tablepress tablerefresh

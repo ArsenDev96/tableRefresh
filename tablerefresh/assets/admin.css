@@ -11,7 +11,7 @@
 	display: inline-block;
 	padding: 1px 8px;
 	border-radius: 2px;
-	border-left: 4px solid;
+	border-inline-start: 4px solid;
 	background: #f6f7f7;
 	font-weight: 600;
 	white-space: nowrap;
@@ -24,7 +24,7 @@
 
 .tablerefresh-tables td { vertical-align: top; }
 .tablerefresh-tables th:first-child { width: 20%; }
-.tablerefresh-actions { white-space: nowrap; text-align: right; }
+.tablerefresh-actions { white-space: nowrap; text-align: end; }
 .tablerefresh-inline-form { display: inline-block; margin: 0 0 4px; }
 
 .tablerefresh-warning { color: #3c434a; }
@@ -56,5 +56,5 @@
 		font-weight: 600;
 		color: #50575e;
 	}
-	.tablerefresh-actions { text-align: left; white-space: normal; }
+	.tablerefresh-actions { text-align: start; white-space: normal; }
 }

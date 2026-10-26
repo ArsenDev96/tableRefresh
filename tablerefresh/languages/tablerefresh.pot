@@ -795,23 +795,23 @@ msgstr ""
 msgid "The table data was edited after the last synchronization. It was not overwritten. Synchronize with \"overwrite\" to replace the manual changes."
 msgstr ""
 
-#: includes/class-table-updater.php:320
+#: includes/class-table-updater.php:324
 msgid "The table is open in the TablePress editor. It was not synchronized, so that unsaved changes are not lost."
 msgstr ""
 
-#: includes/class-table-updater.php:404
+#: includes/class-table-updater.php:408
 msgid "The table could not be read, so an interrupted update could not be checked. The backup was kept and will be checked again on the next sync."
 msgstr ""
 
-#: includes/class-table-updater.php:420
+#: includes/class-table-updater.php:424
 msgid "An interrupted update could not be undone. The backup was kept."
 msgstr ""
 
-#: includes/class-table-updater.php:475
+#: includes/class-table-updater.php:479
 msgid "The previous table state could not be confirmed. A backup was kept and will be restored on the next sync."
 msgstr ""
 
-#: includes/class-table-updater.php:760
+#: includes/class-table-updater.php:764
 msgid "A database error interrupted the write (for example, a deadlock with another write or a lost connection). The change was undone."
 msgstr ""
 
