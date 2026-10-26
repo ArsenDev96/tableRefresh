@@ -1,0 +1,6 @@
+# Downloaded third-party code and tools (TablePress, PHPUnit, Composer, PHPCS).
+/.cache/
+# Files written by tests at runtime.
+/dev/fixtures/data/*
+!/dev/fixtures/data/.gitkeep
+.phpunit.result.cache

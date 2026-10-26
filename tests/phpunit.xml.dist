@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<phpunit
+	bootstrap="bootstrap.php"
+	colors="false"
+	cacheResult="false"
+	beStrictAboutTestsThatDoNotTestAnything="true"
+	failOnRisky="true"
+	failOnWarning="true"
+	convertDeprecationsToExceptions="false"
+	>
+	<testsuites>
+		<testsuite name="integration">
+			<directory suffix="Test.php">integration</directory>
+		</testsuite>
+	</testsuites>
+	<groups>
+		<exclude>
+			<group>external</group>
+		</exclude>
+	</groups>
+</phpunit>

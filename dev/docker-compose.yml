@@ -1,0 +1,82 @@
+# Isolated local test environment for TableRefresh (Phase 1).
+#
+# Everything binds to 127.0.0.1 only. TablePress is mounted read-only so that
+# its source cannot be modified by the plugin or by the tests.
+name: tablerefresh
+
+services:
+  db:
+    image: mariadb:10.11
+    environment:
+      MARIADB_DATABASE: wordpress
+      MARIADB_USER: wordpress
+      MARIADB_PASSWORD: wordpress
+      MARIADB_ROOT_PASSWORD: root
+    volumes:
+      - db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+
+  wordpress:
+    image: wordpress:php8.4-apache
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8089:80"
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_DEBUG: 1
+    volumes:
+      - wp:/var/www/html
+      - ../tablerefresh:/var/www/html/wp-content/plugins/tablerefresh:ro
+      - ../.cache/tablepress-dl/tablepress:/var/www/html/wp-content/plugins/tablepress:ro
+      - ./mu-plugins/tablerefresh-test-env.php:/var/www/html/wp-content/mu-plugins/tablerefresh-test-env.php:ro
+
+  # Serves CSV/HTML/redirect/slow/oversized fixtures on the private Docker network.
+  fixtures:
+    image: python:3.12-slim-bookworm
+    command: ["python", "-I", "/srv/server.py"]
+    volumes:
+      - ./fixtures/server.py:/srv/server.py:ro
+      - ./fixtures/static:/srv/static:ro
+      - ./fixtures/data:/srv/data:ro
+
+  cli: &cli
+    image: wordpress:cli
+    profiles: ["cli"]
+    user: "33:33"
+    depends_on:
+      - db
+      - wordpress
+      - fixtures
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress
+      HOME: /tmp
+    working_dir: /var/www/html
+    volumes:
+      - wp:/var/www/html
+      - ../tablerefresh:/var/www/html/wp-content/plugins/tablerefresh:ro
+      - ../.cache/tablepress-dl/tablepress:/var/www/html/wp-content/plugins/tablepress:ro
+      - ./mu-plugins/tablerefresh-test-env.php:/var/www/html/wp-content/mu-plugins/tablerefresh-test-env.php:ro
+      - ../tests:/tests:ro
+      - ./fixtures/data:/fixtures-data
+      - ../.cache/tools:/tools:ro
+
+  # Same as "cli", on PHP 7.4 (the minimum PHP version declared by the plugin).
+  cli74:
+    <<: *cli
+    image: wordpress:cli-php7.4
+
+volumes:
+  db:
+  wp:

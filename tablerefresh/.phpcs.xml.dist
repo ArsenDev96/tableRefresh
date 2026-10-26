@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<ruleset name="TableRefresh">
+	<description>WordPress Coding Standards for TableRefresh.</description>
+
+	<file>.</file>
+	<arg name="extensions" value="php"/>
+	<arg value="sp"/>
+
+	<config name="minimum_wp_version" value="6.7"/>
+	<config name="testVersion" value="7.4-"/>
+
+	<rule ref="WordPress"/>
+	<rule ref="PHPCompatibilityWP"/>
+
+	<rule ref="WordPress.WP.I18n">
+		<properties>
+			<property name="text_domain" type="array">
+				<element value="tablerefresh"/>
+			</property>
+		</properties>
+	</rule>
+	<rule ref="WordPress.NamingConventions.PrefixAllGlobals">
+		<properties>
+			<property name="prefixes" type="array">
+				<element value="tablerefresh"/>
+				<element value="TableRefresh"/>
+			</property>
+		</properties>
+	</rule>
+</ruleset>
