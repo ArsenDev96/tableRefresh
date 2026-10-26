@@ -198,19 +198,20 @@ final class Sync_Service {
 		}
 
 		return array(
-			'status'      => $update['status'],
-			'table_id'    => $table_id,
-			'rows'        => $update['rows'],
-			'columns'     => $update['columns'],
-			'padded_rows' => $csv['padded_rows'],
-			'source_url'  => $source_url,
-			'fetched_url' => $url,
-			'final_url'   => $download['final_url'],
-			'redirects'   => $download['redirects'],
-			'bytes'       => $download['bytes'],
-			'atomic'      => $update['atomic'],
-			'recovery'    => $recovery['status'],
-			'took_over'   => $lock->took_over(),
+			'status'            => $update['status'],
+			'table_id'          => $table_id,
+			'rows'              => $update['rows'],
+			'columns'           => $update['columns'],
+			'padded_rows'       => $csv['padded_rows'],
+			'source_url'        => $source_url,
+			'fetched_url'       => $url,
+			'final_url'         => $download['final_url'],
+			'redirects'         => $download['redirects'],
+			'bytes'             => $download['bytes'],
+			'atomic'            => $update['atomic'],
+			'recovery'          => $recovery['status'],
+			'took_over'         => $lock->took_over(),
+			'revisions_deleted' => isset( $update['revisions_deleted'] ) ? $update['revisions_deleted'] : 0,
 		);
 	}
 

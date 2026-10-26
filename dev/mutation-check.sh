@@ -65,3 +65,19 @@ mutate class-journal.php \
 	"INSERT IGNORE INTO" \
 	"REPLACE INTO" \
 	"test_journal_of_another_owner" "journal overwrite"
+mutate class-revision-policy.php \
+	"		return self::delete( array_slice( self::sync_revision_ids( \$post_id ), \$keep ) );" \
+	"		return 0;" \
+	"test_default_retention" "no retention"
+mutate class-revision-policy.php \
+	"			return 0 === self::to_keep( \$post->ID ) ? 0 : -1; // No WordPress pruning during a sync." \
+	"			return \$num;" \
+	"test_manual_revisions_survive" "WordPress pruning during syncs"
+mutate class-revision-policy.php \
+	"		return \$num < 0 ? \$num : \$num + self::count( \$post->ID );" \
+	"		return \$num;" \
+	"test_manual_revisions_survive" "sync revisions take manual slots"
+mutate class-table-updater.php \
+	"				Revision_Policy::delete_created_after( \$post_id, (int) \$journal['revision_id'] );" \
+	"" \
+	"test_recovery_before_and_after_retention" "crashed write's revision kept"

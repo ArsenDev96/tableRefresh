@@ -10,6 +10,8 @@
  *   wrote the table post but before its meta (options/visibility) is written.
  * - TABLEREFRESH_TEST_FAULT=exit_after_post_update  Call exit() at the same point.
  * - TABLEREFRESH_TEST_FAULT=throw_after_post_update Throw an exception at the same point.
+ * - TABLEREFRESH_TEST_FAULT=kill_after_revision     SIGKILL right after the revision of the new data
+ *   was stored (WordPress 6.4+ stores it at the end of wp_insert_post()).
  * - TABLEREFRESH_TEST_FAULT=fail_visibility_meta    Make the visibility meta update fail.
  * - TABLEREFRESH_TEST_FAULT=human_save_before_write Another process saves the table through TablePress
  *   after TableRefresh loaded it, right before TableRefresh's transaction starts.
@@ -76,6 +78,20 @@ function tablerefresh_test_human_save( $table_id, $background ) {
 }
 
 $tablerefresh_test_fault = (string) getenv( 'TABLEREFRESH_TEST_FAULT' );
+if ( 'kill_after_revision' === $tablerefresh_test_fault ) {
+	// Right after WordPress stored the revision of the new data (and TableRefresh marked it),
+	// before TablePress wrote the table options and visibility.
+	add_action(
+		'_wp_put_post_revision',
+		static function () {
+			if ( tablerefresh_test_is_writing() ) {
+				fwrite( STDERR, "TEST FAULT: SIGKILL\n" );
+				posix_kill( getmypid(), 9 );
+			}
+		},
+		20
+	);
+}
 if ( 'human_save_before_write' === $tablerefresh_test_fault ) {
 	// After TableRefresh loaded and journaled the table, before its transaction starts.
 	add_action(

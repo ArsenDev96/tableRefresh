@@ -147,6 +147,7 @@ final class Table_Updater {
 			'post_id'       => $post_id,
 			'created'       => time(),
 			'transactional' => $atomic,
+			'revision_id'   => Revision_Policy::max_revision_id( $post_id ),
 			'snapshot'      => $snapshot,
 			'target'        => array(
 				'data_md5'   => $target_hash,
@@ -186,11 +187,13 @@ final class Table_Updater {
 		TablePress_Adapter::write_meta( $post_id, Sync_State::META_KEY, $new_state );
 
 		self::$writing = true;
+		Revision_Policy::writing( $post_id );
 		try {
 			$saved = TablePress_Adapter::save( $table );
 		} catch ( \Throwable $exception ) {
 			$saved = new WP_Error( 'tablerefresh_table_save_failed', __( 'Saving the table failed with an exception.', 'tablerefresh' ), $exception->getMessage() );
 		}
+		Revision_Policy::writing( 0 );
 		self::$writing = false;
 		if ( is_wp_error( $saved ) ) {
 			return $this->abort( $saved );
@@ -230,7 +233,8 @@ final class Table_Updater {
 		Journal::delete( $table_id, $lock->owner() );
 		TablePress_Adapter::clear_caches( $table_id, $post_id );
 
-		$summary['atomic'] = $atomic;
+		$summary['atomic']            = $atomic;
+		$summary['revisions_deleted'] = Revision_Policy::prune( $post_id ); // Only after the commit.
 		return array( 'status' => 'updated' ) + $summary;
 	}
 
@@ -341,6 +345,10 @@ final class Table_Updater {
 		} elseif ( self::is_partial_write( $current, $journal, true ) ) {
 			if ( ! TablePress_Adapter::restore_snapshot( $table_id, $post_id, $journal['snapshot'] ) ) {
 				return new WP_Error( 'tablerefresh_recovery_failed', __( 'An interrupted update could not be undone. The backup was kept.', 'tablerefresh' ) );
+			}
+			// Without a transaction, the interrupted write may have stored a revision of its data.
+			if ( isset( $journal['revision_id'] ) ) {
+				Revision_Policy::delete_created_after( $post_id, (int) $journal['revision_id'] );
 			}
 			$status = 'restored';
 		} else {
@@ -566,6 +574,7 @@ final class Table_Updater {
 	 * Clears the update context.
 	 */
 	private function end(): void {
+		Revision_Policy::writing( 0 );
 		remove_action( '_wp_put_post_revision', array( __CLASS__, 'track_revision' ), 10 );
 		self::$active = null;
 	}
@@ -579,6 +588,7 @@ final class Table_Updater {
 	public static function track_revision( $revision_id, $post_id = 0 ): void {
 		if ( null !== self::$active && (int) $post_id === self::$active['post_id'] ) {
 			self::$active['revision_ids'][] = (int) $revision_id;
+			Revision_Policy::mark( (int) $revision_id );
 		}
 	}
 
@@ -592,6 +602,7 @@ final class Table_Updater {
 		$context       = self::$active;
 		self::$active  = null;
 		self::$writing = false;
+		Revision_Policy::writing( 0 );
 		try {
 			self::undo( $context );
 			$context['lock']->release();
