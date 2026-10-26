@@ -23,11 +23,19 @@ class SecurityHardeningTest extends Integration_Test_Case {
 
 	public function test_decompression_bomb_is_aborted_early_on_any_libcurl() {
 		// 1 MB on the wire, 1 GB decompressed. Without the decoded-size abort, libcurl < 8.4
-		// decompressed all of it (measured: 2.6 s with libcurl 7.83) before the size check.
+		// decompressed all of it (measured: 0.9–2.6 s with libcurl 7.83) before the size check.
+		$decoded = 0;
+		$count   = static function ( $data ) use ( &$decoded ) {
+			$decoded += strlen( (string) $data );
+		};
+		add_action( 'requests-request.progress', $count, 5 );
 		$start  = microtime( true );
 		$result = $this->fetch( 'http://fixtures/gzip-huge', array( 'max_bytes' => 5 * MB_IN_BYTES, 'timeout' => 60 ) );
 		$time   = microtime( true ) - $start;
+		remove_action( 'requests-request.progress', $count, 5 );
 		$this->assertFetchError( 'tablerefresh_http_too_large', $result );
+		// Independent of CPU speed: the decompressed bytes that reached WordPress (1 GB without the abort).
+		$this->assertLessThan( 50 * MB_IN_BYTES, $decoded, sprintf( 'Decompressed %d bytes (libcurl %s).', $decoded, curl_version()['version'] ) );
 		$this->assertLessThan( 1.0, $time, sprintf( 'Aborted after %.2f s (libcurl %s).', $time, curl_version()['version'] ) );
 	}
 
