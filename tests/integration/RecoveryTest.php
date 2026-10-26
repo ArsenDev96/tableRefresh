@@ -149,7 +149,9 @@ class RecoveryTest extends Integration_Test_Case {
 		$this->assertNull( Journal::read( $table_id ) );
 
 		$this->assertSame( 'none', ( new Sync_Service() )->recover( $table_id )['status'] );
-		$this->assertSame( 'updated', $this->sync( $table_id, $url )['status'] );
+		$final = $this->sync( $table_id, $url );
+		$this->assertIsArray( $final, is_wp_error( $final ) ? $final->get_error_code() . ': ' . $final->get_error_message() : '' );
+		$this->assertSame( 'updated', $final['status'] );
 	}
 
 	public function test_journal_of_a_completed_write_is_confirmed_not_reverted() {
@@ -162,6 +164,7 @@ class RecoveryTest extends Integration_Test_Case {
 			$table_id,
 			array(
 				'version'  => 1,
+				'owner'    => 'crashed-process',
 				'table_id' => $table_id,
 				'post_id'  => TablePress_Adapter::get_post_id( $table_id ),
 				'snapshot' => $before,
@@ -178,7 +181,7 @@ class RecoveryTest extends Integration_Test_Case {
 
 	public function test_journal_of_deleted_table_is_discarded() {
 		list( $table_id, , $before ) = $this->prepare_case();
-		Journal::write( $table_id, array( 'post_id' => TablePress_Adapter::get_post_id( $table_id ), 'snapshot' => $before ) );
+		Journal::write( $table_id, array( 'owner' => 'crashed-process', 'post_id' => TablePress_Adapter::get_post_id( $table_id ), 'snapshot' => $before ) );
 		TablePress::$model_table->delete( $table_id );
 		$this->assertSame( 'discarded', ( new Sync_Service() )->recover( $table_id )['status'] );
 		$this->assertNull( Journal::read( $table_id ) );

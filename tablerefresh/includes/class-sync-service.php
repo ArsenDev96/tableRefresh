@@ -58,6 +58,7 @@ final class Sync_Service {
 	 *     @type bool   $keep_shortcodes Keep "[" and "]" so TablePress runs shortcodes in cells. Default false.
 	 *     @type int    $timeout         Download time budget in seconds. Default 15.
 	 *     @type int    $max_bytes       Maximum download size. Default 5 MB.
+	 *     @type string $on_conflict     "abort" (default) or "overwrite"; see Table_Updater::update().
 	 * }
 	 * @return array<string, mixed>|WP_Error Result with "status" ("updated" or "unchanged") on success.
 	 */
@@ -78,6 +79,7 @@ final class Sync_Service {
 				'keep_shortcodes' => false,
 				'timeout'         => 15,
 				'max_bytes'       => 5 * MB_IN_BYTES,
+				'on_conflict'     => 'abort',
 			),
 			$table_id
 		);
@@ -187,7 +189,7 @@ final class Sync_Service {
 
 			$data = self::sanitize_cells( $csv['data'], (bool) $args['keep_formulas'], (bool) $args['keep_shortcodes'] );
 
-			$update = $this->updater->update( $table_id, $data, $lock );
+			$update = $this->updater->update( $table_id, $data, $lock, array( 'on_conflict' => (string) $args['on_conflict'] ) );
 			if ( is_wp_error( $update ) ) {
 				return $update;
 			}
@@ -196,19 +198,19 @@ final class Sync_Service {
 		}
 
 		return array(
-			'status'        => $update['status'],
-			'table_id'      => $table_id,
-			'rows'          => $update['rows'],
-			'columns'       => $update['columns'],
-			'padded_rows'   => $csv['padded_rows'],
-			'source_url'    => $source_url,
-			'fetched_url'   => $url,
-			'final_url'     => $download['final_url'],
-			'redirects'     => $download['redirects'],
-			'bytes'         => $download['bytes'],
-			'transactional' => $update['transactional'],
-			'recovery'      => $recovery['status'],
-			'took_over'     => $lock->took_over(),
+			'status'      => $update['status'],
+			'table_id'    => $table_id,
+			'rows'        => $update['rows'],
+			'columns'     => $update['columns'],
+			'padded_rows' => $csv['padded_rows'],
+			'source_url'  => $source_url,
+			'fetched_url' => $url,
+			'final_url'   => $download['final_url'],
+			'redirects'   => $download['redirects'],
+			'bytes'       => $download['bytes'],
+			'atomic'      => $update['atomic'],
+			'recovery'    => $recovery['status'],
+			'took_over'   => $lock->took_over(),
 		);
 	}
 
@@ -216,10 +218,20 @@ final class Sync_Service {
 	 * Makes remote cell content safe to store in TablePress.
 	 *
 	 * Source content is untrusted, regardless of the capabilities of the user who started
-	 * the sync: HTML is filtered with wp_kses_post(); a leading "=" is encoded so that
-	 * TablePress does not evaluate it as a formula; "[" and "]" are encoded so that
-	 * TablePress does not execute shortcodes from the source. Both encodings are HTML
-	 * entities, so the rendered table shows the original characters.
+	 * the sync. Each neutralization stays readable in the TablePress editor and renders as
+	 * the original text:
+	 *
+	 * - HTML is filtered with wp_kses_post().
+	 * - A leading "=" gets TablePress's own text-escape prefix "'" (as in spreadsheets):
+	 *   TablePress does not evaluate "'=..." and prints it without the apostrophe.
+	 * - A "[" that could start a shortcode becomes "&#091;" (the form that KSES normalizes
+	 *   to, so the stored value does not depend on the user's capabilities). WordPress
+	 *   shortcode names cannot start with < > & / [ ] = or whitespace, so such
+	 *   brackets ("[ ]", "[]", "[/x]", "[=x]") are kept as they are. An entity is used, not
+	 *   WordPress's "[[tag]]" escape, because the escaped output would become a live
+	 *   shortcode again if the rendered table passes through do_shortcode() once more.
+	 *
+	 * Both protections are stored in the data, so they hold even if TableRefresh is deactivated.
 	 *
 	 * @param string[][] $data            Rows.
 	 * @param bool       $keep_formulas   Keep formulas.
@@ -231,10 +243,10 @@ final class Sync_Service {
 			foreach ( $row as $column_index => $cell ) {
 				$cell = wp_kses_post( $cell );
 				if ( ! $keep_shortcodes ) {
-					$cell = str_replace( array( '[', ']' ), array( '&#91;', '&#93;' ), $cell );
+					$cell = (string) preg_replace( '/\[(?=[^<>&\/\[\]\x00-\x20=])/', '&#091;', $cell );
 				}
 				if ( ! $keep_formulas && strlen( $cell ) > 1 && '=' === $cell[0] ) {
-					$cell = '&#61;' . substr( $cell, 1 );
+					$cell = "'" . $cell;
 				}
 				$data[ $row_index ][ $column_index ] = $cell;
 			}

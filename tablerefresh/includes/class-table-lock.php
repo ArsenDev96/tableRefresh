@@ -127,6 +127,15 @@ final class Table_Lock {
 	}
 
 	/**
+	 * Identifies this lock holder (unique per acquisition).
+	 *
+	 * @return string
+	 */
+	public function owner(): string {
+		return $this->value;
+	}
+
+	/**
 	 * Whether an expired lock from another (crashed) process was taken over.
 	 *
 	 * @return bool

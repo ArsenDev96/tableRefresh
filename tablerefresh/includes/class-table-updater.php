@@ -65,21 +65,40 @@ final class Table_Updater {
 	/**
 	 * Replaces the table data.
 	 *
-	 * @param string     $table_id Table ID.
-	 * @param string[][] $data     Validated, sanitized, rectangular data.
-	 * @param Table_Lock $lock     Lock held for this table.
-	 * @return array{status: string, rows: int, columns: int, transactional: bool}|WP_Error
+	 * @param string               $table_id Table ID.
+	 * @param string[][]           $data     Validated, sanitized, rectangular data.
+	 * @param Table_Lock           $lock     Lock held for this table.
+	 * @param array<string, mixed> $args {
+	 *     Optional.
+	 *
+	 *     @type string $on_conflict "abort" (default): refuse to overwrite data that was edited
+	 *                               after the last sync, or a table that is open in the editor.
+	 *                               "overwrite": replace it anyway. Concurrent saves during the
+	 *                               write itself always abort.
+	 * }
+	 * @return array{status: string, rows: int, columns: int, atomic: bool}|WP_Error
 	 */
-	public function update( string $table_id, array $data, Table_Lock $lock ) {
+	public function update( string $table_id, array $data, Table_Lock $lock, array $args = array() ) {
 		global $wpdb;
 
+		$on_conflict = isset( $args['on_conflict'] ) && 'overwrite' === $args['on_conflict'] ? 'overwrite' : 'abort';
+
+		// Start from what is stored, not from a cache that another process may have outdated.
+		$post_id = TablePress_Adapter::get_post_id( $table_id );
+		if ( $post_id > 0 ) {
+			TablePress_Adapter::clear_caches( $table_id, $post_id );
+		}
 		$existing = TablePress_Adapter::load( $table_id );
 		if ( is_wp_error( $existing ) ) {
 			return $existing;
 		}
-		$post_id = TablePress_Adapter::get_post_id( $table_id );
-		if ( $post_id <= 0 ) {
+		$snapshot = $post_id > 0 ? TablePress_Adapter::read_snapshot( $post_id ) : null;
+		if ( null === $snapshot ) {
 			return new WP_Error( 'tablerefresh_table_post_missing', __( 'The storage post of the table could not be determined.', 'tablerefresh' ) );
+		}
+		$mismatch = TablePress_Adapter::verify_post( $snapshot, $existing );
+		if ( $mismatch ) {
+			return $mismatch;
 		}
 
 		$table = TablePress_Adapter::prepare( $existing, $data );
@@ -87,19 +106,32 @@ final class Table_Updater {
 			return $table;
 		}
 		$expected_data = TablePress_Adapter::expected_stored_data( $table );
+		$target_hash   = Sync_State::data_hash( $expected_data );
+		$state         = Sync_State::from_snapshot( $snapshot );
 		$summary       = array(
-			'rows'          => count( $expected_data ),
-			'columns'       => count( $expected_data[0] ),
-			'transactional' => false,
+			'rows'    => count( $expected_data ),
+			'columns' => count( $expected_data[0] ),
+			'atomic'  => false,
 		);
 
 		if ( $existing['data'] === $expected_data && $existing['visibility'] == $table['visibility'] ) { // phpcs:ignore Universal.Operators.StrictComparisons.LooseEqual -- int/string-insensitive comparison of visibility flags.
+			// Nothing to write. If someone made the table match the source by hand, adopt it as the baseline.
+			if ( null === $state || $state['data_md5'] !== $target_hash ) {
+				TablePress_Adapter::write_meta( $post_id, Sync_State::META_KEY, Sync_State::encode( $target_hash ) );
+			}
 			return array( 'status' => 'unchanged' ) + $summary;
 		}
 
-		$snapshot = TablePress_Adapter::read_snapshot( $post_id );
-		if ( null === $snapshot ) {
-			return new WP_Error( 'tablerefresh_table_post_missing', __( 'The storage post of the table could not be read.', 'tablerefresh' ) );
+		if ( 'abort' === $on_conflict ) {
+			$conflict = $this->detect_conflict( $post_id, $existing, $state );
+			if ( $conflict ) {
+				return $conflict;
+			}
+		}
+
+		$atomic = $this->supports_transactions();
+		if ( ! $atomic && ! self::allow_non_atomic() ) {
+			return new WP_Error( 'tablerefresh_db_not_transactional', __( 'The database tables for posts and post meta do not support transactions (InnoDB is required), so the table cannot be updated atomically. Nothing was changed.', 'tablerefresh' ) );
 		}
 
 		// A process whose lock expired must not touch the journal of the new lock holder.
@@ -107,31 +139,51 @@ final class Table_Updater {
 			return new WP_Error( 'tablerefresh_lock_lost', __( 'The sync lock expired before the table was written. Nothing was changed.', 'tablerefresh' ) );
 		}
 
-		$transactional = $this->supports_transactions();
-		$journal       = array(
-			'version'       => 1,
+		$new_state = Sync_State::encode( $target_hash );
+		$journal   = array(
+			'version'       => 2,
+			'owner'         => $lock->owner(),
 			'table_id'      => $table_id,
 			'post_id'       => $post_id,
 			'created'       => time(),
-			'transactional' => $transactional,
+			'transactional' => $atomic,
 			'snapshot'      => $snapshot,
 			'target'        => array(
-				'data_md5'   => md5( (string) wp_json_encode( $expected_data ) ),
+				'data_md5'   => $target_hash,
 				'visibility' => $table['visibility'],
+				'state'      => $new_state,
 			),
 		);
 		if ( ! Journal::write( $table_id, $journal ) ) {
 			return new WP_Error( 'tablerefresh_journal_failed', __( 'The backup of the table could not be stored, so the table was not changed.', 'tablerefresh' ) );
 		}
 
-		$this->begin( $table_id, $post_id, $snapshot, $transactional, $lock );
+		/**
+		 * Fires after the backup was stored and right before the guarded write of a table begins.
+		 *
+		 * @param string $table_id Table ID.
+		 */
+		do_action( 'tablerefresh_before_write', $table_id );
 
-		if ( $transactional && false === $wpdb->query( 'START TRANSACTION' ) ) { // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-			return $this->abort( new WP_Error( 'tablerefresh_transaction_failed', __( 'A database transaction could not be started.', 'tablerefresh' ) ) );
+		$this->begin( $table_id, $post_id, $snapshot, $atomic, $lock, $new_state );
+
+		// Failures before the first write only need a rollback; nothing may be restored, because
+		// the table may already hold someone else's newer data.
+		if ( $atomic && false === $wpdb->query( 'START TRANSACTION' ) ) { // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+			return $this->abandon( new WP_Error( 'tablerefresh_transaction_failed', __( 'A database transaction could not be started.', 'tablerefresh' ) ) );
 		}
-		if ( ! $lock->is_held( $transactional ) ) {
-			return $this->abort( new WP_Error( 'tablerefresh_lock_lost', __( 'The sync lock expired before the table was written. Nothing was changed.', 'tablerefresh' ) ) );
+		if ( ! $lock->is_held( $atomic ) ) {
+			return $this->abandon( new WP_Error( 'tablerefresh_lock_lost', __( 'The sync lock expired before the table was written. Nothing was changed.', 'tablerefresh' ) ) );
 		}
+
+		// Compare-and-swap: lock the table rows and make sure nobody saved the table since it was
+		// loaded above. A TablePress editor save that starts now waits until this transaction ends.
+		$current = TablePress_Adapter::read_snapshot( $post_id, $atomic );
+		if ( ! TablePress_Adapter::snapshots_equal( $current, $snapshot ) || $current['post_modified_gmt'] !== $snapshot['post_modified_gmt'] ) {
+			return $this->abandon( self::conflict_error( 'tablerefresh_conflict_concurrent', __( 'The table was saved by someone else while it was being synchronized. Nothing was changed.', 'tablerefresh' ), $existing ) );
+		}
+
+		TablePress_Adapter::write_meta( $post_id, Sync_State::META_KEY, $new_state );
 
 		self::$writing = true;
 		try {
@@ -170,16 +222,87 @@ final class Table_Updater {
 			return $this->abort( new WP_Error( 'tablerefresh_verify_failed', __( 'TablePress did not return the imported data after saving. The change was reverted.', 'tablerefresh' ) ) );
 		}
 
-		if ( $transactional && false === $wpdb->query( 'COMMIT' ) ) { // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+		if ( $atomic && false === $wpdb->query( 'COMMIT' ) ) { // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 			return $this->abort( new WP_Error( 'tablerefresh_transaction_failed', __( 'The database transaction could not be committed.', 'tablerefresh' ) ) );
 		}
 
 		$this->end();
-		Journal::delete( $table_id );
+		Journal::delete( $table_id, $lock->owner() );
 		TablePress_Adapter::clear_caches( $table_id, $post_id );
 
-		$summary['transactional'] = $transactional;
+		$summary['atomic'] = $atomic;
 		return array( 'status' => 'updated' ) + $summary;
+	}
+
+	/**
+	 * Refuses to overwrite manual changes or a table that is open in the TablePress editor.
+	 *
+	 * @param int                                             $post_id  Table post ID.
+	 * @param array<string, mixed>                            $existing Table as loaded.
+	 * @param array{data_md5: string, synced_at: string}|null $state    Baseline of the last sync.
+	 * @return WP_Error|null
+	 */
+	private function detect_conflict( int $post_id, array $existing, ?array $state ): ?WP_Error {
+		// No baseline: the table was never synchronized; linking it to a source replaces its data.
+		if ( null !== $state && Sync_State::data_hash( $existing['data'] ) !== $state['data_md5'] ) {
+			return self::conflict_error( 'tablerefresh_conflict_modified', __( 'The table data was edited after the last synchronization. It was not overwritten. Synchronize with "overwrite" to replace the manual changes.', 'tablerefresh' ), $existing, $state );
+		}
+
+		$editors = Editor_Guard::active_sessions( $post_id );
+		if ( ! empty( $editors ) ) {
+			$error = self::conflict_error( 'tablerefresh_conflict_editing', __( 'The table is open in the TablePress editor. It was not synchronized, so that unsaved changes are not lost.', 'tablerefresh' ), $existing, $state );
+			$names = array();
+			foreach ( $editors as $user_id => $opened ) {
+				$names[] = array(
+					'user_id' => $user_id,
+					'name'    => \TablePress::get_user_display_name( $user_id ),
+					'opened'  => gmdate( 'Y-m-d H:i:s', (int) $opened ),
+				);
+			}
+			$error->add_data( array( 'editors' => $names ), 'tablerefresh_conflict_editing_users' );
+			return $error;
+		}
+		return null;
+	}
+
+	/**
+	 * Builds a conflict error with details for the user.
+	 *
+	 * @param string                                          $code     Error code.
+	 * @param string                                          $message  Message.
+	 * @param array<string, mixed>                            $existing Table as loaded.
+	 * @param array{data_md5: string, synced_at: string}|null $state    Baseline.
+	 * @return WP_Error
+	 */
+	private static function conflict_error( string $code, string $message, array $existing, ?array $state = null ): WP_Error {
+		return new WP_Error(
+			$code,
+			$message,
+			array(
+				'conflict'      => true,
+				'last_modified' => isset( $existing['last_modified'] ) ? $existing['last_modified'] : '',
+				'last_editor'   => isset( $existing['options']['last_editor'] ) ? \TablePress::get_user_display_name( (int) $existing['options']['last_editor'] ) : '',
+				'last_synced'   => null !== $state ? gmdate( 'Y-m-d H:i:s', (int) $state['synced_at'] ) : null,
+			)
+		);
+	}
+
+	/**
+	 * Whether best-effort (non-atomic) updates are allowed on databases without transactions.
+	 *
+	 * @return bool
+	 */
+	private static function allow_non_atomic(): bool {
+		/**
+		 * Filters whether tables may be updated on a database without transaction support.
+		 *
+		 * Off by default. When enabled, a failed write is undone from the journal snapshot, but a
+		 * crash (killed process) can leave the table partially written until the next sync or
+		 * `wp tablerefresh recover` restores it; visitors can see that state meanwhile.
+		 *
+		 * @param bool $allow Default false.
+		 */
+		return (bool) apply_filters( 'tablerefresh_allow_non_atomic_updates', false );
 	}
 
 	/**
@@ -188,9 +311,15 @@ final class Table_Updater {
 	 * The caller must hold the table's lock.
 	 *
 	 * @param string $table_id Table ID.
+	 * A snapshot is only restored over a partial write of that same update: the table must still
+	 * carry the update's unique baseline (written first, inside the write) and its data must be
+	 * the before- or after-state of that update. Any other state means the table was changed
+	 * after the interrupted update, so the journal is outdated and the table is left alone.
+	 *
 	 * @return array{status: string}|WP_Error Status "none", "rolled_back" (the table is unchanged),
 	 *                                        "completed" (the write had finished), "restored"
-	 *                                        (a partial write was undone), or "discarded".
+	 *                                        (a partial write was undone), or "discarded" (the
+	 *                                        journal was outdated or the table no longer exists).
 	 */
 	public function recover( string $table_id ) {
 		$journal = Journal::read( $table_id );
@@ -205,18 +334,43 @@ final class Table_Updater {
 			return array( 'status' => 'discarded' );
 		}
 
-		$status = 'restored';
 		if ( TablePress_Adapter::snapshots_equal( $current, $journal['snapshot'] ) ) {
 			$status = 'rolled_back';
 		} elseif ( self::matches_target( $current, $journal ) ) {
 			$status = 'completed';
-		} elseif ( ! TablePress_Adapter::restore_snapshot( $table_id, $post_id, $journal['snapshot'] ) ) {
-			return new WP_Error( 'tablerefresh_recovery_failed', __( 'An interrupted update could not be undone. The backup was kept.', 'tablerefresh' ) );
+		} elseif ( self::is_partial_write( $current, $journal, true ) ) {
+			if ( ! TablePress_Adapter::restore_snapshot( $table_id, $post_id, $journal['snapshot'] ) ) {
+				return new WP_Error( 'tablerefresh_recovery_failed', __( 'An interrupted update could not be undone. The backup was kept.', 'tablerefresh' ) );
+			}
+			$status = 'restored';
+		} else {
+			$status = 'discarded';
 		}
 
 		Journal::delete( $table_id );
 		TablePress_Adapter::clear_caches( $table_id, $post_id );
 		return array( 'status' => $status );
+	}
+
+	/**
+	 * Gives up before anything was written: rolls back and drops this update's journal.
+	 *
+	 * @param WP_Error $error Cause.
+	 * @return WP_Error
+	 */
+	private function abandon( WP_Error $error ): WP_Error {
+		global $wpdb;
+		self::$writing = false;
+		$context       = self::$active;
+		$this->end();
+		if ( null !== $context ) {
+			if ( $context['transactional'] ) {
+				$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+			}
+			Journal::delete( $context['table_id'], $context['lock']->owner() );
+			TablePress_Adapter::clear_caches( $context['table_id'], $context['post_id'] );
+		}
+		return $error;
 	}
 
 	/**
@@ -242,11 +396,11 @@ final class Table_Updater {
 	}
 
 	/**
-	 * Rolls back, restores the snapshot if needed, and deletes the journal once the table is back
-	 * in its original state.
+	 * Rolls back, restores the snapshot over this update's own partial write, and deletes the
+	 * journal once no partial write of this update remains.
 	 *
 	 * @param array<string, mixed> $context Update context.
-	 * @return bool Whether the table is in its original state.
+	 * @return bool Whether no partial write of this update remains.
 	 */
 	private static function undo( array $context ): bool {
 		global $wpdb;
@@ -257,6 +411,7 @@ final class Table_Updater {
 
 		$current  = TablePress_Adapter::read_snapshot( $context['post_id'] );
 		$restored = TablePress_Adapter::snapshots_equal( $current, $context['snapshot'] )
+			|| ! self::is_partial_write( $current, array( 'target' => array( 'state' => $context['new_state'] ) ), false ) // Changed by someone else afterwards.
 			|| TablePress_Adapter::restore_snapshot( $context['table_id'], $context['post_id'], $context['snapshot'] );
 
 		// Without a transaction, a revision of the failed content may already be stored.
@@ -266,9 +421,37 @@ final class Table_Updater {
 
 		TablePress_Adapter::clear_caches( $context['table_id'], $context['post_id'] );
 		if ( $restored ) {
-			Journal::delete( $context['table_id'] );
+			Journal::delete( $context['table_id'], $context['lock']->owner() );
 		}
 		return $restored;
+	}
+
+	/**
+	 * Whether the stored state is a partial write of the update described by a journal entry.
+	 *
+	 * @param array<string, string|null>|null $current     Current snapshot.
+	 * @param array<string, mixed>            $journal     Journal entry (or an entry with only target.state).
+	 * @param bool                            $strict_data Also require the data to be the update's
+	 *                                                     before- or after-state.
+	 * @return bool
+	 */
+	private static function is_partial_write( ?array $current, array $journal, bool $strict_data ): bool {
+		if ( null === $current ) {
+			return false;
+		}
+		if ( ! isset( $journal['target']['state'] ) ) {
+			return true; // Journal format 1 (no fingerprint): restore, as before.
+		}
+		if ( ! isset( $current[ Sync_State::META_KEY ] ) || $current[ Sync_State::META_KEY ] !== $journal['target']['state'] ) {
+			return false;
+		}
+		if ( ! $strict_data ) {
+			return true;
+		}
+		$data = json_decode( (string) $current['post_content'], true );
+		$hash = is_array( $data ) ? Sync_State::data_hash( $data ) : '';
+		$old  = json_decode( (string) $journal['snapshot']['post_content'], true );
+		return $hash === $journal['target']['data_md5'] || ( is_array( $old ) && Sync_State::data_hash( $old ) === $hash );
 	}
 
 	/**
@@ -287,7 +470,8 @@ final class Table_Updater {
 		$options  = TablePress_Adapter::OPTIONS_META_KEY;
 
 		return is_array( $data )
-			&& md5( (string) wp_json_encode( $data ) ) === $journal['target']['data_md5']
+			&& Sync_State::data_hash( $data ) === $journal['target']['data_md5']
+			&& ( ! isset( $journal['target']['state'] ) || ( isset( $current[ Sync_State::META_KEY ] ) && $current[ Sync_State::META_KEY ] === $journal['target']['state'] ) )
 			&& json_decode( (string) $current[ TablePress_Adapter::VISIBILITY_META_KEY ], true ) == $journal['target']['visibility'] // phpcs:ignore Universal.Operators.StrictComparisons.LooseEqual
 			&& json_decode( (string) $current[ $options ], true ) == json_decode( (string) $snapshot[ $options ], true ) // phpcs:ignore Universal.Operators.StrictComparisons.LooseEqual -- TablePress normalizes boolean/integer options.
 			&& $current['post_title'] === $snapshot['post_title']
@@ -295,27 +479,26 @@ final class Table_Updater {
 	}
 
 	/**
-	 * Whether the posts and postmeta tables support transactions (InnoDB).
+	 * Whether updates can be atomic: the posts, postmeta, and options tables all use InnoDB.
+	 *
+	 * Fails closed: if the storage engines cannot be determined, updates are not atomic.
 	 *
 	 * @return bool
 	 */
 	private function supports_transactions(): bool {
-		global $wpdb;
-
 		/**
 		 * Filters whether TableRefresh wraps table writes in a database transaction.
 		 *
-		 * Without transactions, the journal is still used to undo failed writes.
+		 * Returning false makes every update non-atomic (and refused, unless
+		 * `tablerefresh_allow_non_atomic_updates` allows it).
 		 *
 		 * @param bool $use_transactions Default true (if the tables use InnoDB).
 		 */
 		if ( ! apply_filters( 'tablerefresh_use_transactions', true ) ) {
 			return false;
 		}
-
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Metadata query.
-		$engines = $wpdb->get_col( $wpdb->prepare( 'SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN (%s, %s)', $wpdb->posts, $wpdb->postmeta ) );
-		if ( 2 !== count( $engines ) ) {
+		$engines = self::storage_engines();
+		if ( 3 !== count( $engines ) ) {
 			return false;
 		}
 		foreach ( $engines as $engine ) {
@@ -327,6 +510,32 @@ final class Table_Updater {
 	}
 
 	/**
+	 * Storage engines of the tables that a sync writes to.
+	 *
+	 * @return array<string, string> Table name => engine; tables whose engine is unknown are missing.
+	 */
+	public static function storage_engines(): array {
+		global $wpdb;
+		$tables = array( $wpdb->posts, $wpdb->postmeta, $wpdb->options );
+
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- Metadata queries; placeholders are filled via spread.
+		$rows    = $wpdb->get_results( $wpdb->prepare( 'SELECT TABLE_NAME, ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN (%s, %s, %s)', ...$tables ), ARRAY_A );
+		$engines = array();
+		foreach ( (array) $rows as $row ) {
+			$engines[ $row['TABLE_NAME'] ] = (string) $row['ENGINE'];
+		}
+		// Some hosts restrict information_schema; SHOW TABLE STATUS works with plain table privileges.
+		foreach ( array_diff( $tables, array_keys( $engines ) ) as $table ) {
+			$status = $wpdb->get_row( $wpdb->prepare( 'SHOW TABLE STATUS LIKE %s', $wpdb->esc_like( $table ) ), ARRAY_A );
+			if ( is_array( $status ) && ! empty( $status['Engine'] ) ) {
+				$engines[ $table ] = (string) $status['Engine'];
+			}
+		}
+		// phpcs:enable
+		return $engines;
+	}
+
+	/**
 	 * Records the update context so that exit() or fatal errors can be undone on shutdown.
 	 *
 	 * @param string                     $table_id      Table ID.
@@ -334,14 +543,16 @@ final class Table_Updater {
 	 * @param array<string, string|null> $snapshot      Snapshot.
 	 * @param bool                       $transactional Whether a transaction is used.
 	 * @param Table_Lock                 $lock          Lock.
+	 * @param string                     $new_state     Baseline value (fingerprint) of this update.
 	 */
-	private function begin( string $table_id, int $post_id, array $snapshot, bool $transactional, Table_Lock $lock ): void {
+	private function begin( string $table_id, int $post_id, array $snapshot, bool $transactional, Table_Lock $lock, string $new_state ): void {
 		self::$active = array(
 			'table_id'      => $table_id,
 			'post_id'       => $post_id,
 			'snapshot'      => $snapshot,
 			'transactional' => $transactional,
 			'lock'          => $lock,
+			'new_state'     => $new_state,
 			'revision_ids'  => array(),
 		);
 		add_action( '_wp_put_post_revision', array( __CLASS__, 'track_revision' ), 10, 2 );

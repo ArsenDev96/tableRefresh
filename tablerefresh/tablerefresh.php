@@ -21,6 +21,8 @@ define( 'TABLEREFRESH_FILE', __FILE__ );
 define( 'TABLEREFRESH_DIR', __DIR__ . '/' );
 
 require_once TABLEREFRESH_DIR . 'includes/class-tablepress-adapter.php';
+require_once TABLEREFRESH_DIR . 'includes/class-sync-state.php';
+require_once TABLEREFRESH_DIR . 'includes/class-editor-guard.php';
 require_once TABLEREFRESH_DIR . 'includes/class-url-guard.php';
 require_once TABLEREFRESH_DIR . 'includes/class-http-fetcher.php';
 require_once TABLEREFRESH_DIR . 'includes/class-google-sheets.php';

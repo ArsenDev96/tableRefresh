@@ -60,6 +60,9 @@ abstract class Integration_Test_Case extends TestCase {
 			Journal::delete( $table_id );
 			$this->delete_lock( $table_id );
 		}
+		foreach ( $this->sessions as $session ) {
+			WP_Session_Tokens::get_instance( $session[0] )->destroy( $session[1] );
+		}
 		foreach ( $this->fixture_files as $file ) {
 			if ( file_exists( $file ) ) {
 				unlink( $file );
@@ -239,6 +242,101 @@ abstract class Integration_Test_Case extends TestCase {
 	 */
 	protected function run_cli( array $args, array $env = array() ): array {
 		return $this->wait_cli( $this->start_cli( $args, $env ) );
+	}
+
+	/**
+	 * Session tokens created by the current test.
+	 *
+	 * @var array<int, array{0: int, 1: string}>
+	 */
+	private array $sessions = array();
+
+	/**
+	 * Logs a user in for HTTP requests to the Apache container (real auth cookies).
+	 *
+	 * @param int $user_id User ID.
+	 * @return string Cookie header value.
+	 */
+	protected function login_cookie( int $user_id = 1 ): string {
+		$expiration       = time() + HOUR_IN_SECONDS;
+		$token            = WP_Session_Tokens::get_instance( $user_id )->create( $expiration );
+		$this->sessions[] = array( $user_id, $token );
+		return AUTH_COOKIE . '=' . rawurlencode( wp_generate_auth_cookie( $user_id, $expiration, 'auth', $token ) )
+			. '; ' . LOGGED_IN_COOKIE . '=' . rawurlencode( wp_generate_auth_cookie( $user_id, $expiration, 'logged_in', $token ) );
+	}
+
+	/**
+	 * Sends an HTTP request to the WordPress site served by Apache.
+	 *
+	 * @param string                    $path   Path, e.g. "/wp-admin/admin-ajax.php".
+	 * @param string                    $cookie Cookie header.
+	 * @param array<string, mixed>|null $post   Form fields for a POST request.
+	 * @return string Response body.
+	 */
+	protected function http( string $path, string $cookie = '', ?array $post = null ): string {
+		$options = array(
+			'method'        => null === $post ? 'GET' : 'POST',
+			'header'        => "Host: localhost:8089\r\nCookie: {$cookie}\r\n" . ( null === $post ? '' : "Content-Type: application/x-www-form-urlencoded\r\n" ),
+			'timeout'       => 30,
+			'ignore_errors' => true,
+		);
+		if ( null !== $post ) {
+			$options['content'] = http_build_query( $post );
+		}
+		return (string) file_get_contents( 'http://wordpress' . $path, false, stream_context_create( array( 'http' => $options ) ) );
+	}
+
+	/**
+	 * Opens a table in the real TablePress editor and returns what the browser receives.
+	 *
+	 * @param string $table_id Table ID.
+	 * @param string $cookie   Cookie header from login_cookie().
+	 * @return array{nonce: string, data: array<int, array<int, string>>, options: array<string, mixed>, visibility: array<string, mixed>, meta: array<string, mixed>}
+	 */
+	protected function open_editor( string $table_id, string $cookie ): array {
+		$html = $this->http( '/wp-admin/admin.php?page=tablepress&action=edit&table_id=' . rawurlencode( $table_id ), $cookie );
+		$this->assertSame( 1, preg_match( "/edit_table: '([0-9a-f]+)'/", $html, $nonce ), 'TablePress editor did not load: ' . substr( wp_strip_all_tags( $html ), 0, 300 ) );
+		$editor = array( 'nonce' => $nonce[1] );
+		foreach ( array( 'meta', 'data', 'options', 'visibility' ) as $item ) {
+			$this->assertSame( 1, preg_match( "/\\t{$item}: JSON\\.parse\\( '(.*)' \\),\\n/", $html, $match ), "Editor variable {$item} not found." );
+			$editor[ $item ] = json_decode( str_replace( array( "\\'", '\\\\' ), array( "'", '\\' ), $match[1] ), true );
+		}
+		return $editor;
+	}
+
+	/**
+	 * Clicks "Save Changes" in the TablePress editor: the same AJAX request that edit.js sends.
+	 *
+	 * @param string               $table_id Table ID.
+	 * @param array<string, mixed> $editor   Result of open_editor(), with modified data.
+	 * @param string               $cookie   Cookie header.
+	 * @return array<string, mixed> Decoded JSON response.
+	 */
+	protected function save_in_editor( string $table_id, array $editor, string $cookie ): array {
+		$body = $this->http(
+			'/wp-admin/admin-ajax.php',
+			$cookie,
+			array(
+				'action'      => 'tablepress_save_table',
+				'_ajax_nonce' => $editor['nonce'],
+				'tablepress'  => array(
+					'id'          => $table_id,
+					'new_id'      => $table_id,
+					'name'        => $editor['meta']['name'],
+					'description' => $editor['meta']['description'],
+					'data'        => wp_json_encode( $editor['data'] ),
+					'options'     => wp_json_encode( $editor['options'] ),
+					'visibility'  => wp_json_encode( $editor['visibility'] ),
+					'number'      => array(
+						'rows'    => count( $editor['data'] ),
+						'columns' => count( $editor['data'][0] ),
+					),
+				),
+			)
+		);
+		$json = json_decode( $body, true );
+		$this->assertIsArray( $json, 'Unexpected AJAX response: ' . substr( $body, 0, 300 ) );
+		return $json;
 	}
 
 	/**

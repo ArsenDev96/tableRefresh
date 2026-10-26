@@ -1,0 +1,59 @@
+#!/bin/sh
+# Disables one protection at a time and checks that the tests notice.
+#
+# Each mutation replaces an exact snippet in a plugin file, runs the given tests, and
+# restores the file. A mutation that leaves the tests green means a gap in the tests.
+set -u
+cd "$(dirname "$0")/.."
+
+mutate() { # file, exact original, replacement, PHPUnit --filter
+	file="tablerefresh/includes/$1"
+	cp "$file" "$file.orig"
+	python -I - "$file" "$2" "$3" <<'PY'
+import sys
+path, old, new = sys.argv[1:4]
+s = open(path, encoding="utf-8").read()
+if s.count(old) != 1:
+    sys.exit("snippet not found exactly once in " + path)
+open(path, "w", encoding="utf-8", newline="\n").write(s.replace(old, new))
+PY
+	result=$(sh dev/run-tests.sh --filter "$4" 2>&1 | grep -E "^(OK|Tests:)")
+	mv "$file.orig" "$file"
+	case "$result" in
+		OK*) echo "SURVIVED  $5 -> $result" ;;
+		*)   echo "caught    $5 -> $result" ;;
+	esac
+}
+
+mutate class-table-updater.php \
+	"			\$conflict = \$this->detect_conflict( \$post_id, \$existing, \$state );" \
+	"			\$conflict = null;" \
+	"EditorConflictTest" "no conflict detection"
+mutate class-table-updater.php \
+	"		if ( ! TablePress_Adapter::snapshots_equal( \$current, \$snapshot ) || \$current['post_modified_gmt'] !== \$snapshot['post_modified_gmt'] ) {" \
+	"		if ( false ) {" \
+	"test_save_between_load_and_write" "no compare-and-swap"
+mutate class-table-updater.php \
+	"			return \$this->abandon( self::conflict_error( 'tablerefresh_conflict_concurrent'," \
+	"			return \$this->abort( self::conflict_error( 'tablerefresh_conflict_concurrent'," \
+	"test_save_between_load_and_write" "restore after compare-and-swap conflict"
+mutate class-editor-guard.php \
+	"		if ( null !== \$opened && null !== \$state && (float) \$state['synced_at'] > (float) \$opened ) {" \
+	"		if ( false ) {" \
+	"test_stale_editor" "no stale-editor guard"
+mutate class-table-updater.php \
+	"		} elseif ( self::is_partial_write( \$current, \$journal, true ) ) {" \
+	"		} elseif ( true ) {" \
+	"IntegrityGuardsTest|RecoveryTest" "restore any outdated journal"
+mutate class-tablepress-adapter.php \
+	"		if ( self::post_type() !== \$snapshot['post_type'] || json_decode( (string) \$snapshot['post_content'], true ) !== \$table['data'] ) {" \
+	"		if ( false ) {" \
+	"test_table_mapped_to_a_foreign_post" "no storage-post verification"
+mutate class-table-updater.php \
+	"		if ( ! \$atomic && ! self::allow_non_atomic() ) {" \
+	"		if ( false ) {" \
+	"test_non_atomic" "non-atomic updates allowed silently"
+mutate class-journal.php \
+	"INSERT IGNORE INTO" \
+	"REPLACE INTO" \
+	"test_journal_of_another_owner" "journal overwrite"

@@ -19,6 +19,7 @@ final class Plugin {
 	 */
 	public static function init(): void {
 		add_action( 'admin_notices', array( __CLASS__, 'maybe_show_dependency_notice' ) );
+		Editor_Guard::init();
 
 		if ( defined( 'WP_CLI' ) && WP_CLI ) {
 			require_once TABLEREFRESH_DIR . 'includes/class-cli-command.php';

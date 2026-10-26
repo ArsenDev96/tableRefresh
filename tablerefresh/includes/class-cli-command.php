@@ -51,6 +51,16 @@ final class CLI_Command {
 	 * [--keep-shortcodes]
 	 * : Let TablePress run shortcodes contained in cells.
 	 *
+	 * [--on-conflict=<on-conflict>]
+	 * : What to do if the table data was edited after the last sync, or the table is open in the
+	 * TablePress editor.
+	 * ---
+	 * default: abort
+	 * options:
+	 *   - abort
+	 *   - overwrite
+	 * ---
+	 *
 	 * [--format=<format>]
 	 * : Output format.
 	 * ---
@@ -85,6 +95,7 @@ final class CLI_Command {
 				'allow_ragged'    => ! WP_CLI\Utils\get_flag_value( $assoc_args, 'strict-columns', false ),
 				'keep_formulas'   => (bool) WP_CLI\Utils\get_flag_value( $assoc_args, 'keep-formulas', false ),
 				'keep_shortcodes' => (bool) WP_CLI\Utils\get_flag_value( $assoc_args, 'keep-shortcodes', false ),
+				'on_conflict'     => (string) WP_CLI\Utils\get_flag_value( $assoc_args, 'on-conflict', 'abort' ),
 			)
 		);
 
@@ -127,7 +138,7 @@ final class CLI_Command {
 		if ( 'json' === $format ) {
 			if ( is_wp_error( $result ) ) {
 				$data = array();
-				foreach ( array_merge( $result->get_error_codes(), array( 'tablerefresh_reverted' ) ) as $code ) {
+				foreach ( array_merge( $result->get_error_codes(), array( 'tablerefresh_reverted', 'tablerefresh_conflict_editing_users' ) ) as $code ) {
 					if ( null !== $result->get_error_data( $code ) ) {
 						$data[ $code ] = $result->get_error_data( $code );
 					}

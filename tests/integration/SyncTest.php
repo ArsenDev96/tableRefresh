@@ -26,7 +26,7 @@ class SyncTest extends Integration_Test_Case {
 
 		$this->assertIsArray( $result, is_wp_error( $result ) ? $result->get_error_message() : '' );
 		$this->assertSame( 'updated', $result['status'] );
-		$this->assertTrue( $result['transactional'] );
+		$this->assertTrue( $result['atomic'] );
 		$this->assertSame( 3, $result['rows'] );
 		$this->assertSame( 3, $result['columns'] );
 
@@ -266,13 +266,14 @@ class SyncTest extends Integration_Test_Case {
 		$data = $this->load_table( $table_id )['data'];
 		$this->assertSame( 'alert(1)x', $data[1][0] );
 		$this->assertSame( '<img src="x">', $data[1][1] );
-		$this->assertSame( '&#61;1+1', $data[2][0] );
-		$this->assertSame( '&#91;table id=' . $table_id . ' /&#93;', $data[2][1] );
+		$this->assertSame( "'=1+1", $data[2][0], "TablePress's own text escape for formulas." );
+		$this->assertSame( '&#091;table id=' . $table_id . ' /]', $data[2][1] );
 		$this->assertSame( '=', $data[3][0], 'A lone "=" is not a formula.' );
 		$this->assertSame( '<a href="https://example.com">link</a>', $data[3][1] );
 
 		$html = do_shortcode( '[table id=' . $table_id . ' cache_table_output=false /]' );
-		$this->assertStringContainsString( '&#61;1+1', $html, 'Formula is displayed, not evaluated.' );
+		$this->assertStringContainsString( '>=1+1<', $html, 'Formula is displayed as text, not evaluated.' );
+		$this->assertStringNotContainsString( '>2<', $html );
 		$this->assertStringNotContainsString( '<script', $html );
 		$this->assertStringNotContainsString( 'onerror', $html );
 		$this->assertSame( 1, substr_count( $html, '<table ' ), 'Shortcode from the source must not render a nested table.' );

@@ -18,3 +18,12 @@ $wpdb->query(
 		$wpdb->esc_like( 'tablerefresh_journal_' ) . '%'
 	)
 );
+
+// Sync baselines and editor sessions stored on TablePress table posts.
+// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+$wpdb->query(
+	$wpdb->prepare(
+		"DELETE FROM {$wpdb->postmeta} WHERE meta_key LIKE %s",
+		$wpdb->esc_like( '_tablerefresh_' ) . '%'
+	)
+);
