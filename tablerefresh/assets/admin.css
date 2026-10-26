@@ -1,0 +1,57 @@
+/* TableRefresh admin screen. Uses WordPress admin colors and components. */
+
+.tablerefresh .tablerefresh-empty {
+	max-width: 48em;
+	padding: 4px 16px 8px;
+	background: #fff;
+	border: 1px solid #c3c4c7;
+}
+
+.tablerefresh-status {
+	display: inline-block;
+	padding: 1px 8px;
+	border-radius: 2px;
+	border-left: 4px solid;
+	background: #f6f7f7;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.tablerefresh-status-success { border-color: #00a32a; }
+.tablerefresh-status-neutral { border-color: #8c8f94; }
+.tablerefresh-status-warning { border-color: #dba617; background: #fcf9e8; }
+.tablerefresh-status-error { border-color: #d63638; background: #fcf0f1; }
+
+.tablerefresh-tables td { vertical-align: top; }
+.tablerefresh-actions { white-space: nowrap; text-align: right; }
+.tablerefresh-inline-form { display: inline-block; margin: 0 0 4px; }
+
+.tablerefresh-warning { color: #3c434a; }
+.tablerefresh-cron-note { margin-top: 16px; max-width: 48em; }
+
+.tablerefresh-attention h2 { margin: 0.8em 0 0.4em; }
+.tablerefresh-choices { display: flex; flex-wrap: wrap; gap: 16px 32px; margin-bottom: 8px; }
+.tablerefresh-choices > div { flex: 1 1 18em; max-width: 28em; }
+.tablerefresh-choices h3 { margin: 0.5em 0; font-size: 1.05em; }
+
+.tablerefresh .tablerefresh-button-delete { color: #b32d2e; border-color: #b32d2e; }
+.tablerefresh .tablerefresh-button-delete:hover,
+.tablerefresh .tablerefresh-button-delete:focus { color: #fff; background: #b32d2e; border-color: #b32d2e; }
+
+/* Small screens: one card per table instead of columns. */
+@media screen and (max-width: 782px) {
+	.tablerefresh-tables thead,
+	.tablerefresh-history thead { display: none; }
+	.tablerefresh-tables tr,
+	.tablerefresh-tables td,
+	.tablerefresh-history tr,
+	.tablerefresh-history td { display: block; width: auto; }
+	.tablerefresh-tables td[data-label]::before,
+	.tablerefresh-history td[data-label]::before {
+		content: attr(data-label);
+		display: block;
+		font-weight: 600;
+		color: #50575e;
+	}
+	.tablerefresh-actions { text-align: left; white-space: normal; }
+}

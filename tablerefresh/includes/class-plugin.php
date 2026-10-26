@@ -23,6 +23,11 @@ final class Plugin {
 		Revision_Policy::init();
 		Scheduler::init();
 
+		if ( is_admin() ) {
+			require_once TABLEREFRESH_DIR . 'includes/class-admin.php';
+			Admin::init();
+		}
+
 		if ( defined( 'WP_CLI' ) && WP_CLI ) {
 			require_once TABLEREFRESH_DIR . 'includes/class-cli-command.php';
 			\WP_CLI::add_command( 'tablerefresh', CLI_Command::class );

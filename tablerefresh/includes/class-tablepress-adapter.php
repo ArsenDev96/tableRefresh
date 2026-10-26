@@ -155,6 +155,19 @@ final class TablePress_Adapter {
 	}
 
 	/**
+	 * URL of a TablePress admin screen, wherever the TablePress menu is placed.
+	 *
+	 * @param array<string, string> $params Screen parameters, e.g. action "edit" and table_id.
+	 * @return string
+	 */
+	public static function admin_url( array $params ): string {
+		if ( isset( \TablePress::$controller ) && method_exists( '\TablePress', 'url' ) ) {
+			return \TablePress::url( $params );
+		}
+		return add_query_arg( array_map( 'rawurlencode', $params ), admin_url( 'admin.php?page=tablepress' ) );
+	}
+
+	/**
 	 * IDs and names of all tables, without loading their data.
 	 *
 	 * @return array<string, string> Table ID => name.

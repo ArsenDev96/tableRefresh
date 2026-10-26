@@ -153,3 +153,36 @@ mutate class-table-updater.php \
 	"		if ( self::write_interrupted() && ! self::matches_target( TablePress_Adapter::read_snapshot( \$post_id ), \$journal ) ) {" \
 	"		if ( self::write_interrupted() ) {" \
 	"test_commit_whose_confirmation_was_lost" "commit whose confirmation was lost undone"
+mutate class-admin.php \
+	"		if ( ! self::can_manage( \$table_id ) ) {" \
+	"		if ( false ) {" \
+	"test_requests_without_valid_nonce_or_permission" "admin: no permission check"
+mutate class-admin.php \
+	"		check_admin_referer( 'tablerefresh_' . \$action . '_' . \$post_id );" \
+	"" \
+	"test_requests_without_valid_nonce_or_permission" "admin: no nonce check"
+mutate class-admin.php \
+	"		if ( empty( \$_POST['confirm_replace'] ) ) {" \
+	"		if ( false ) {" \
+	"test_conflict_is_shown_and_resolved" "admin: replace without confirmation"
+mutate class-admin.php \
+	"		if ( ( \$is_new || null === Sync_State::read( \$post_id ) ) && empty( \$_POST['confirm_replace'] ) ) {" \
+	"		if ( false ) {" \
+	"test_setup_requires_confirmation" "admin: setup without confirmation"
+mutate class-sync-runner.php \
+	"'replace' === \$trigger ? 'overwrite' : 'abort'" \
+	"'overwrite'" \
+	"test_manual_edit_pauses" "runner: syncs overwrite manual edits"
+mutate class-sync-runner.php \
+	"				\$config['attention'] = Sync_Config::ATTENTION_CONFLICT; // Persists until an administrator decides." \
+	"" \
+	"test_manual_edit_pauses" "runner: manual edits do not pause automatic sync"
+mutate class-sync-runner.php \
+	"			} elseif ( 'failed' === \$outcome && ++\$config['failures'] >= self::MAX_FAILURES && \$config['enabled'] ) {" \
+	"			} elseif ( false ) {" \
+	"test_automatic_sync_pauses_after_repeated_failures" "runner: endless retries"
+mutate class-scheduler.php \
+	"		wp_clear_scheduled_hook( self::HOOK, \$args );
+		wp_schedule_event(" \
+	"		wp_schedule_event(" \
+	"test_exactly_one_event" "scheduler: duplicate events"
