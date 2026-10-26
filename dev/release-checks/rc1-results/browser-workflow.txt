@@ -1,0 +1,36 @@
+PASS install from ZIP upload
+PASS activate
+PASS plugin row "Set up" link
+PASS TablePress table created — ID 1
+PASS empty state with steps
+PASS first sync from Google Sheets — Class roster: The table was updated: 31 rows, 6 columns.
+PASS shortcode page shows Google data
+PASS settings saved (hourly)
+PASS automatic sync hourly with next run
+PASS Sync now after the sheet changed — Class roster: The table was updated: 5 rows, 3 columns.
+PASS Sync now without changes
+PASS error message: missing/private Google Sheet — Class roster: Nothing was found at the source address (HTTP 404). Check the link.
+PASS error message: missing CSV (404) — Class roster: Nothing was found at the source address (HTTP 404). Check the link.
+PASS error message: private address refused (SSRF) — Class roster: The URL points to a private, local, or reserved network address.
+PASS back to the full sheet
+PASS edit saved in the TablePress editor — EDITED IN TABLEPRESS
+PASS conflict shown with the two choices
+PASS manual edit not overwritten
+PASS list offers "Review changes"
+PASS dashboard notice
+PASS keep changes
+PASS status off
+PASS no scheduled event after keep
+PASS resume: one scheduled event
+PASS Sync now still stops at the edit
+PASS replace needs the confirmation checkbox
+PASS replace with source data
+PASS edit replaced by source data
+PASS disable automatic sync
+PASS enable again
+PASS table options unchanged — {"last_editor":1,"table_head":1,"table_foot":0,"alternating_row_colors":true,"ro
+PASS table ID unchanged
+PASS shortcode still renders the table
+PASS no horizontal scrolling on a phone — overflow 0 px
+PASS no JavaScript errors
+PASS no PHP notices in debug.log — empty

@@ -1,0 +1,15 @@
+caught    no conflict detection -> Tests: 10, Assertions: 129, Failures: 5.
+caught    lock acquired without the atomic insert -> Tests: 1, Assertions: 12, Failures: 1.
+caught    no compare-and-swap -> Tests: 1, Assertions: 4, Failures: 1.
+caught    restore after compare-and-swap conflict -> Tests: 1, Assertions: 5, Failures: 1.
+caught    no stale-editor guard -> Tests: 1, Assertions: 12, Failures: 1.
+caught    restore any outdated journal -> Tests: 21, Assertions: 269, Failures: 2.
+caught    no storage-post verification -> Tests: 1, Assertions: 2, Failures: 1.
+caught    non-atomic updates allowed silently -> Tests: 1, Assertions: 4, Failures: 1.
+caught    journal overwrite -> Tests: 1, Assertions: 3, Failures: 1.
+caught    no retention -> Tests: 1, Assertions: 54, Failures: 1.
+caught    WordPress pruning during syncs -> Tests: 1, Assertions: 15, Failures: 1.
+caught    sync revisions take manual slots -> Tests: 1, Assertions: 19, Failures: 1.
+caught    crashed write's revision kept -> Tests: 2, Assertions: 37, Failures: 1.
+caught    environment proxies used -> Tests: 1, Assertions: 1, Failures: 1.
+caught    WordPress proxy allowed silently -> Tests: 1, Assertions: 5, Failures: 1.
