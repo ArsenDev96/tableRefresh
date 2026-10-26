@@ -1,0 +1,4 @@
+# Keep LF everywhere (shell scripts run in Linux containers).
+* text=auto eol=lf
+# CSV fixtures are byte-exact test inputs (CRLF, BOM, invalid UTF-8, NUL).
+dev/fixtures/static/* -text
