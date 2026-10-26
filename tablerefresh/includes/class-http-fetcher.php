@@ -21,6 +21,13 @@ defined( 'ABSPATH' ) || exit;
  *   `limit_response_size` only truncates the kept body and keeps downloading.
  * - One overall time budget covers the whole redirect chain.
  *
+ * - Decompressed content is limited too: the transfer is aborted as soon as the decoded body
+ *   exceeds the size limit, independent of the libcurl version.
+ * - Proxies: with a WordPress HTTP proxy (WP_PROXY_HOST), the proxy resolves host names and
+ *   connects, so the address pinning cannot be guaranteed. Such downloads are refused unless
+ *   `tablerefresh_allow_proxy` allows them. Proxies from environment variables (http_proxy,
+ *   https_proxy), which libcurl would otherwise use silently, are always ignored.
+ *
  * Only the cURL transport provides these guarantees, so responses from any other transport
  * (or from a `pre_http_request` short-circuit) are rejected.
  */
@@ -66,6 +73,13 @@ final class Http_Fetcher {
 	private string $connected_ip = '';
 
 	/**
+	 * Whether the decoded body of the current request exceeded the size limit.
+	 *
+	 * @var bool
+	 */
+	private bool $decoded_too_large = false;
+
+	/**
 	 * Downloads a URL.
 	 *
 	 * @param string               $url  Source URL.
@@ -73,10 +87,11 @@ final class Http_Fetcher {
 	 *     Optional. Limits.
 	 *
 	 *     @type int $timeout       Total seconds for all requests incl. redirects. Default 15.
-	 *     @type int $max_bytes     Maximum response size in bytes. Default 5 MB.
-	 *     @type int $max_redirects Maximum number of redirects. Default 5.
+	 *     @type int $max_bytes            Maximum (decompressed) response size in bytes. Default 5 MB.
+	 *     @type int $max_compressed_bytes Maximum bytes on the wire. Default: max_bytes.
+	 *     @type int $max_redirects        Maximum number of redirects. Default 5.
 	 * }
-	 * @return array{body: string, final_url: string, content_type: string, redirects: int, bytes: int}|WP_Error
+	 * @return array{body: string, final_url: string, content_type: string, redirects: int, bytes: int, via_proxy: bool}|WP_Error
 	 */
 	public function fetch( string $url, array $args = array() ) {
 		$args = wp_parse_args(
@@ -87,6 +102,9 @@ final class Http_Fetcher {
 				'max_redirects' => 5,
 			)
 		);
+		if ( empty( $args['max_compressed_bytes'] ) ) {
+			$args['max_compressed_bytes'] = $args['max_bytes'];
+		}
 
 		if ( ! function_exists( 'curl_init' ) ) {
 			return new WP_Error( 'tablerefresh_http_transport', __( 'The PHP cURL extension is required for secure downloads.', 'tablerefresh' ) );
@@ -107,7 +125,7 @@ final class Http_Fetcher {
 				return new WP_Error( 'tablerefresh_http_timeout', __( 'The source did not respond in time.', 'tablerefresh' ) );
 			}
 
-			$response = $this->request( $target, $remaining, (int) $args['max_bytes'] );
+			$response = $this->request( $target, $remaining, (int) $args['max_bytes'], (int) $args['max_compressed_bytes'] );
 			if ( is_wp_error( $response ) ) {
 				return $response;
 			}
@@ -163,6 +181,7 @@ final class Http_Fetcher {
 				'content_type' => $content_type,
 				'redirects'    => $redirects,
 				'bytes'        => strlen( $body ),
+				'via_proxy'    => ! empty( $response['tablerefresh_via_proxy'] ),
 			);
 		}
 	}
@@ -170,15 +189,38 @@ final class Http_Fetcher {
 	/**
 	 * Performs one pinned request without following redirects.
 	 *
-	 * @param array<string, mixed> $target    Result of URL_Guard::check().
-	 * @param float                $timeout   Seconds.
-	 * @param int                  $max_bytes Size limit.
+	 * @param array<string, mixed> $target         Result of URL_Guard::check().
+	 * @param float                $timeout        Seconds.
+	 * @param int                  $max_bytes      Decoded size limit.
+	 * @param int                  $max_wire_bytes Size limit on the wire.
 	 * @return array<string, mixed>|WP_Error
 	 */
-	private function request( array $target, float $timeout, int $max_bytes ) {
-		$this->target       = $target + array( 'max_bytes' => $max_bytes );
-		$this->pinned       = false;
-		$this->connected_ip = '';
+	private function request( array $target, float $timeout, int $max_bytes, int $max_wire_bytes ) {
+		$proxy     = new \WP_HTTP_Proxy();
+		$via_proxy = $proxy->is_enabled() && $proxy->send_through_proxy( $target['url'] );
+		/**
+		 * Filters whether sources may be downloaded through the WordPress HTTP proxy.
+		 *
+		 * Off by default: through a proxy, TableRefresh can still validate the URL and every
+		 * redirect, but cannot pin or verify the address that is connected to, so DNS-rebinding
+		 * protection depends on the proxy. Enable this only if the proxy itself blocks requests
+		 * to private and internal networks.
+		 *
+		 * @param bool   $allow Default false.
+		 * @param string $url   URL.
+		 */
+		if ( $via_proxy && ! apply_filters( 'tablerefresh_allow_proxy', false, $target['url'] ) ) {
+			return new WP_Error( 'tablerefresh_http_proxy_unsupported', __( 'WordPress is configured to use an HTTP proxy for this URL. Downloads through a proxy cannot be protected against requests to internal networks, so the source was not downloaded.', 'tablerefresh' ) );
+		}
+
+		$this->target            = $target + array(
+			'max_bytes'      => $max_bytes,
+			'max_wire_bytes' => $max_wire_bytes,
+			'via_proxy'      => $via_proxy,
+		);
+		$this->pinned            = false;
+		$this->connected_ip      = '';
+		$this->decoded_too_large = false;
 
 		$host_is_external = static function ( $is_external, $host ) use ( $target ) {
 			return $is_external || ( $target['private'] && strtolower( (string) $host ) === $target['host'] );
@@ -186,6 +228,7 @@ final class Http_Fetcher {
 
 		add_action( 'http_api_curl', array( $this, 'configure_curl' ), PHP_INT_MAX, 3 );
 		add_action( 'requests-curl.after_request', array( $this, 'record_connection' ), 10, 2 );
+		add_action( 'requests-request.progress', array( $this, 'track_decoded_size' ), 10, 2 );
 		add_filter( 'http_request_host_is_external', $host_is_external, 10, 2 );
 		try {
 			// wp_safe_remote_get() additionally runs wp_http_validate_url() (defense in depth).
@@ -207,12 +250,16 @@ final class Http_Fetcher {
 		} finally {
 			remove_action( 'http_api_curl', array( $this, 'configure_curl' ), PHP_INT_MAX );
 			remove_action( 'requests-curl.after_request', array( $this, 'record_connection' ), 10 );
+			remove_action( 'requests-request.progress', array( $this, 'track_decoded_size' ), 10 );
 			remove_filter( 'http_request_host_is_external', $host_is_external, 10 );
 			$pinned       = $this->pinned;
 			$connected_ip = $this->connected_ip;
 			$this->target = null;
 		}
 
+		if ( $this->decoded_too_large ) {
+			return self::too_large_error();
+		}
 		if ( is_wp_error( $response ) ) {
 			return self::map_transport_error( $response );
 		}
@@ -221,11 +268,10 @@ final class Http_Fetcher {
 			return new WP_Error( 'tablerefresh_http_transport', __( 'The download did not use the cURL transport (or was intercepted by another plugin), so it could not be secured and was discarded.', 'tablerefresh' ) );
 		}
 
-		$proxy = new \WP_HTTP_Proxy();
-		if ( ! ( $proxy->is_enabled() && $proxy->send_through_proxy( $target['url'] ) ) ) {
-			if ( '' === $connected_ip || @inet_pton( $connected_ip ) !== @inet_pton( $target['ip'] ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-				return new WP_Error( 'tablerefresh_url_blocked', __( 'The connection was not made to the verified address and was discarded.', 'tablerefresh' ) );
-			}
+		if ( $via_proxy ) {
+			$response['tablerefresh_via_proxy'] = true; // Opted in above; the proxy chose the address.
+		} elseif ( '' === $connected_ip || @inet_pton( $connected_ip ) !== @inet_pton( $target['ip'] ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			return new WP_Error( 'tablerefresh_url_blocked', __( 'The connection was not made to the verified address and was discarded.', 'tablerefresh' ) );
 		}
 
 		return $response;
@@ -245,24 +291,52 @@ final class Http_Fetcher {
 
 		$ip    = $this->target['ip'];
 		$ip    = false !== strpos( $ip, ':' ) ? '[' . $ip . ']' : $ip;
-		$limit = (int) $this->target['max_bytes'];
+		$limit = (int) $this->target['max_wire_bytes'];
+		$self  = $this;
 
 		// phpcs:disable WordPress.WP.AlternativeFunctions.curl_curl_setopt -- Hardening the handle the HTTP API created.
-		curl_setopt( $handle, CURLOPT_RESOLVE, array( sprintf( '%s:%d:%s', $this->target['host'], $this->target['port'], $ip ) ) );
+		if ( ! $this->target['via_proxy'] ) {
+			curl_setopt( $handle, CURLOPT_PROXY, '' ); // Ignore http_proxy/https_proxy environment variables.
+			curl_setopt( $handle, CURLOPT_RESOLVE, array( sprintf( '%s:%d:%s', $this->target['host'], $this->target['port'], $ip ) ) );
+		}
 		curl_setopt( $handle, CURLOPT_FOLLOWLOCATION, false );
 		curl_setopt( $handle, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS );
-		curl_setopt( $handle, CURLOPT_MAXFILESIZE, $limit ); // Refuses bodies with a too-large Content-Length up front.
+		curl_setopt( $handle, CURLOPT_MAXFILESIZE, (int) $this->target['max_bytes'] ); // Content-Length check (and, with libcurl 8.4+, during the transfer).
 		curl_setopt( $handle, CURLOPT_NOPROGRESS, false );
 		curl_setopt(
 			$handle,
 			defined( 'CURLOPT_XFERINFOFUNCTION' ) ? CURLOPT_XFERINFOFUNCTION : CURLOPT_PROGRESSFUNCTION, // XFERINFO constant: PHP 8.2+.
-			static function ( $ch, $download_total, $downloaded ) use ( $limit ) {
-				return $downloaded > $limit ? 1 : 0; // Non-zero aborts the transfer.
+			static function ( $ch, $download_total, $downloaded ) use ( $limit, $self ) {
+				return ( $downloaded > $limit || $self->decoded_too_large() ) ? 1 : 0; // Non-zero aborts the transfer.
 			}
 		);
 		// phpcs:enable
 
 		$this->pinned = true;
+	}
+
+	/**
+	 * Tracks the decompressed size of the body as Requests receives it.
+	 *
+	 * Requests reports each decoded chunk before storing it; its own byte limit only truncates
+	 * the stored body, and older libcurl versions keep decompressing until the end of the stream.
+	 *
+	 * @param string $data           Decoded chunk.
+	 * @param int    $received_bytes Decoded bytes stored before this chunk.
+	 */
+	public function track_decoded_size( $data, $received_bytes = 0 ): void {
+		if ( null !== $this->target && (int) $received_bytes + strlen( (string) $data ) > (int) $this->target['max_bytes'] ) {
+			$this->decoded_too_large = true;
+		}
+	}
+
+	/**
+	 * Whether the decoded body exceeded the size limit (read by the cURL progress callback).
+	 *
+	 * @return bool
+	 */
+	public function decoded_too_large(): bool {
+		return $this->decoded_too_large;
 	}
 
 	/**
@@ -327,6 +401,9 @@ final class Http_Fetcher {
 			case 42: // Aborted by the progress callback.
 			case 63: // CURLOPT_MAXFILESIZE.
 				return self::too_large_error();
+			case 18: // Body shorter than announced, or chunked stream not terminated.
+			case 56: // Connection reset while receiving.
+				return new WP_Error( 'tablerefresh_http_incomplete', __( 'The download was interrupted before the source was received completely.', 'tablerefresh' ), $message );
 			case 6:
 			case 7:
 				return new WP_Error( 'tablerefresh_http_unreachable', __( 'The source server could not be reached.', 'tablerefresh' ), $message );

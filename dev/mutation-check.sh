@@ -81,3 +81,19 @@ mutate class-table-updater.php \
 	"				Revision_Policy::delete_created_after( \$post_id, (int) \$journal['revision_id'] );" \
 	"" \
 	"test_recovery_before_and_after_retention" "crashed write's revision kept"
+mutate class-http-fetcher.php \
+	"			curl_setopt( \$handle, CURLOPT_PROXY, '' ); // Ignore http_proxy/https_proxy environment variables." \
+	"" \
+	"test_proxy_environment_variables" "environment proxies used"
+mutate class-http-fetcher.php \
+	"		if ( \$via_proxy && ! apply_filters( 'tablerefresh_allow_proxy', false, \$target['url'] ) ) {" \
+	"		if ( false ) {" \
+	"test_wordpress_proxy_is_refused" "WordPress proxy allowed silently"
+mutate class-http-fetcher.php \
+	"			\$this->decoded_too_large = true;" \
+	"" \
+	"test_decompression_bomb" "no decoded-size abort (caught only with libcurl < 8.4: CLI_SERVICE=cli74)"
+mutate class-http-fetcher.php \
+	"			case 18: // Body shorter than announced, or chunked stream not terminated." \
+	"			case 99918:" \
+	"test_interrupted_downloads" "truncation not reported"

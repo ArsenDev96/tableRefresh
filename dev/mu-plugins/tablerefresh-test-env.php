@@ -55,6 +55,19 @@ if ( getenv( 'TABLEREFRESH_TEST_NO_TRANSACTIONS' ) ) {
 	add_filter( 'tablerefresh_allow_non_atomic_updates', '__return_true' );
 }
 
+// WordPress HTTP proxy settings, as a site would define them in wp-config.php.
+if ( getenv( 'TABLEREFRESH_TEST_WP_PROXY' ) ) {
+	list( $tablerefresh_proxy_host, $tablerefresh_proxy_port ) = explode( ':', (string) getenv( 'TABLEREFRESH_TEST_WP_PROXY' ) );
+	define( 'WP_PROXY_HOST', $tablerefresh_proxy_host );
+	define( 'WP_PROXY_PORT', $tablerefresh_proxy_port );
+	if ( getenv( 'TABLEREFRESH_TEST_WP_PROXY_BYPASS' ) ) {
+		define( 'WP_PROXY_BYPASS_HOSTS', (string) getenv( 'TABLEREFRESH_TEST_WP_PROXY_BYPASS' ) );
+	}
+}
+if ( getenv( 'TABLEREFRESH_TEST_ALLOW_PROXY' ) ) {
+	add_filter( 'tablerefresh_allow_proxy', '__return_true' );
+}
+
 if ( false !== getenv( 'TABLEREFRESH_TEST_EDITOR_TTL' ) ) {
 	add_filter(
 		'tablerefresh_editor_session_ttl',
