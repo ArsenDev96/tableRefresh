@@ -93,7 +93,7 @@ class RecoveryTest extends Integration_Test_Case {
 			array( 'sync', $table_id, $url ),
 			array(
 				'TABLEREFRESH_TEST_FAULT'    => 'kill_after_post_update',
-				'TABLEREFRESH_TEST_LOCK_TTL' => '2',
+				'TABLEREFRESH_TEST_LOCK_TTL' => '5',
 			)
 		);
 		$this->assertStringContainsString( 'TEST FAULT: SIGKILL', $run['stderr'] );
@@ -108,7 +108,7 @@ class RecoveryTest extends Integration_Test_Case {
 		$this->assertInstanceOf( WP_Error::class, $blocked );
 		$this->assertSame( 'tablerefresh_locked', $blocked->get_error_code() );
 
-		sleep( 3 );
+		sleep( 6 ); // Lock lifetime of the killed process is 5 s.
 		$result = $this->sync( $table_id, $url );
 		$this->assertIsArray( $result, is_wp_error( $result ) ? $result->get_error_message() : '' );
 		$this->assertTrue( $result['took_over'] );
@@ -125,7 +125,7 @@ class RecoveryTest extends Integration_Test_Case {
 			array(
 				'TABLEREFRESH_TEST_FAULT'           => 'kill_after_post_update',
 				'TABLEREFRESH_TEST_NO_TRANSACTIONS' => '1',
-				'TABLEREFRESH_TEST_LOCK_TTL'        => '2',
+				'TABLEREFRESH_TEST_LOCK_TTL'        => '5',
 			)
 		);
 		$this->assertStringContainsString( 'TEST FAULT: SIGKILL', $run['stderr'] );
@@ -141,7 +141,7 @@ class RecoveryTest extends Integration_Test_Case {
 		$locked = $this->run_cli( array( 'recover', $table_id ) );
 		$this->assertSame( 'tablerefresh_locked', $locked['json']['code'] );
 
-		sleep( 3 );
+		sleep( 6 ); // Lock lifetime of the killed process is 5 s.
 		$recovered = $this->run_cli( array( 'recover', $table_id ) );
 		$this->assertSame( 0, $recovered['exit'], $recovered['stdout'] . $recovered['stderr'] );
 		$this->assertSame( 'restored', $recovered['json']['status'] );

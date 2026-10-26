@@ -6,6 +6,12 @@
 set -u
 cd "$(dirname "$0")/.."
 
+# Apache's OPcache does not reliably notice file changes on Windows bind mounts, so it could
+# keep serving a mutated (or, after restoring, an outdated) file. Restart Apache instead.
+reset_opcache() {
+	(cd dev && docker compose restart wordpress >/dev/null 2>&1)
+}
+
 mutate() { # file, exact original, replacement, PHPUnit --filter
 	file="tablerefresh/includes/$1"
 	cp "$file" "$file.orig"
@@ -17,8 +23,10 @@ if s.count(old) != 1:
     sys.exit("snippet not found exactly once in " + path)
 open(path, "w", encoding="utf-8", newline="\n").write(s.replace(old, new))
 PY
+	reset_opcache
 	result=$(sh dev/run-tests.sh --filter "$4" 2>&1 | grep -E "^(OK|Tests:)")
 	mv "$file.orig" "$file"
+	reset_opcache
 	case "$result" in
 		OK*) echo "SURVIVED  $5 -> $result" ;;
 		*)   echo "caught    $5 -> $result" ;;
