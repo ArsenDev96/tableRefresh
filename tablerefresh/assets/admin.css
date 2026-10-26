@@ -23,6 +23,7 @@
 .tablerefresh-status-error { border-color: #d63638; background: #fcf0f1; }
 
 .tablerefresh-tables td { vertical-align: top; }
+.tablerefresh-tables th:first-child { width: 20%; }
 .tablerefresh-actions { white-space: nowrap; text-align: right; }
 .tablerefresh-inline-form { display: inline-block; margin: 0 0 4px; }
 
@@ -46,6 +47,8 @@
 	.tablerefresh-tables td,
 	.tablerefresh-history tr,
 	.tablerefresh-history td { display: block; width: auto; }
+	.tablerefresh-tables tr + tr,
+	.tablerefresh-history tr + tr { border-top: 1px solid #c3c4c7; }
 	.tablerefresh-tables td[data-label]::before,
 	.tablerefresh-history td[data-label]::before {
 		content: attr(data-label);

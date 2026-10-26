@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name:       TableRefresh – Auto Sync for TablePress
- * Description:       Synchronizes existing TablePress tables with CSV URLs and public Google Sheets. Phase 1 prototype: WP-CLI only.
- * Version:           0.1.0
+ * Description:       Keeps existing TablePress tables in sync with CSV files and public Google Sheets, on a schedule or on demand.
+ * Version:           0.2.0
  * Requires at least: 6.7
  * Requires PHP:      7.4
  * Requires Plugins:  tablepress
@@ -16,7 +16,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'TABLEREFRESH_VERSION', '0.1.0' );
+define( 'TABLEREFRESH_VERSION', '0.2.0' );
 define( 'TABLEREFRESH_FILE', __FILE__ );
 define( 'TABLEREFRESH_DIR', __DIR__ . '/' );
 

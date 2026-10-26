@@ -150,6 +150,22 @@ final class Sync_Runner {
 					? __( 'Google returned a web page instead of the sheet data. Check that the sheet is shared with "Anyone with the link". Private sheets are not supported.', 'tablerefresh' )
 					: __( 'The address returned a web page instead of CSV data. Use the direct link to the CSV file.', 'tablerefresh' );
 				break;
+			case 'tablerefresh_http_status':
+				$data   = $error->get_error_data();
+				$status = is_array( $data ) && isset( $data['status'] ) ? (int) $data['status'] : 0;
+				if ( in_array( $status, array( 404, 410 ), true ) ) {
+					/* translators: %d: HTTP status code. */
+					$message = sprintf( __( 'Nothing was found at the source address (HTTP %d). Check the link.', 'tablerefresh' ), $status );
+				} elseif ( in_array( $status, array( 401, 403 ), true ) ) {
+					/* translators: %d: HTTP status code. */
+					$message = sprintf( __( 'The source refused access (HTTP %d). The file must be publicly available without signing in.', 'tablerefresh' ), $status );
+				} elseif ( $status >= 500 ) {
+					/* translators: %d: HTTP status code. */
+					$message = sprintf( __( 'The source server reported an error (HTTP %d). This is often temporary.', 'tablerefresh' ), $status );
+				} else {
+					$message = $error->get_error_message();
+				}
+				break;
 			case 'tablerefresh_http_timeout':
 				$message = __( 'The source did not respond in time.', 'tablerefresh' );
 				break;

@@ -109,7 +109,7 @@ class AdminScreenTest extends Integration_Test_Case {
 
 	private function submit( string $cookie, array $fields ): array {
 		$response = $this->request( '/wp-admin/admin-post.php', $cookie, $fields );
-		wp_cache_flush(); // Apache changed the database.
+		wp_cache_flush_runtime(); // Apache changed the database; drop only this process's copies.
 		return $response;
 	}
 
@@ -293,8 +293,12 @@ class AdminScreenTest extends Integration_Test_Case {
 		do_action( Scheduler::HOOK, $post_id );
 		$this->assertSame( Sync_Config::ATTENTION_CONFLICT, Sync_Config::get( $post_id )['attention'] );
 		$this->assertStringContainsString( 'automatic sync is paused for 1 table', $this->request( '/wp-admin/index.php', $cookie )['body'], 'Dashboard notice.' );
+		$list = $this->page( $cookie );
+		$this->assertStringContainsString( 'Review changes', $list );
+		$this->assertStringNotContainsString( 'name="action" value="tablerefresh_sync"><input type="hidden" name="table" value="' . $post_id . '"', $list, 'No "Sync now" while a decision is pending.' );
 		$edit = $this->page( $cookie, '&action=edit&table=' . $post_id );
 		$this->assertStringContainsString( 'This table was changed in TablePress', $edit );
+		$this->assertStringContainsString( 'Automatic sync: Prices', $edit );
 
 		// Replace without the confirmation checkbox: refused.
 		$replace = $this->form_fields( $edit, 'tablerefresh_replace', $post_id );
@@ -333,6 +337,12 @@ class AdminScreenTest extends Integration_Test_Case {
 			)
 		);
 		$this->assertSame( 'hourly', wp_get_scheduled_event( Scheduler::HOOK, array( $post_id ) )->schedule );
+		$this->assertSame( 1, Scheduler::count_events( $post_id ) );
+
+		// A lost event is restored when an administrator opens the list.
+		wp_clear_scheduled_hook( Scheduler::HOOK, array( $post_id ) );
+		$this->page( $cookie );
+		wp_cache_flush_runtime();
 		$this->assertSame( 1, Scheduler::count_events( $post_id ) );
 
 		$this->submit( $cookie, $this->form_fields( $edit, 'tablerefresh_save', $post_id ) + array( 'url' => $url, 'frequency' => 'hourly' ) ); // Unchecked.

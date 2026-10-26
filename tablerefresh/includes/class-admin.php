@@ -193,6 +193,7 @@ final class Admin {
 	 * The list of configured tables.
 	 */
 	private static function render_list(): void {
+		Scheduler::reconcile(); // Repairs lost or duplicate events (e.g. after an update or a reset cron option).
 		$configs = array();
 		foreach ( Sync_Config::all() as $post_id => $config ) {
 			$table_id = TablePress_Adapter::get_table_id( $post_id );
@@ -233,7 +234,12 @@ final class Admin {
 				echo '<td data-label="' . esc_attr__( 'Automatic sync', 'tablerefresh' ) . '">' . self::schedule_summary( $post_id, $config ) . '</td>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped in schedule_summary().
 				echo '<td data-label="' . esc_attr__( 'Last sync', 'tablerefresh' ) . '">' . self::last_sync_summary( $post_id ) . '</td>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped in last_sync_summary().
 				echo '<td class="tablerefresh-actions">';
-				self::sync_button( $post_id, 'list' );
+				if ( Sync_Config::ATTENTION_CONFLICT === $config['attention'] ) {
+					// "Sync now" would stop at the edits again; the decision is on the settings screen.
+					echo '<a href="' . esc_url( self::url( array( 'action' => 'edit', 'table' => $post_id ) ) ) . '" class="button button-primary">' . esc_html__( 'Review changes', 'tablerefresh' ) . '</a>';
+				} else {
+					self::sync_button( $post_id, 'list' );
+				}
 				echo ' <a href="' . esc_url( self::url( array( 'action' => 'edit', 'table' => $post_id ) ) ) . '" class="button">' . esc_html__( 'Settings and history', 'tablerefresh' ) . '</a></td>';
 				echo '</tr>';
 			}
@@ -260,7 +266,8 @@ final class Admin {
 		);
 		$name     = isset( $names[ $table_id ] ) ? $names[ $table_id ] : '';
 
-		echo '<h1>' . esc_html( $post_id > 0 ? __( 'Automatic sync settings', 'tablerefresh' ) : __( 'Set up automatic sync', 'tablerefresh' ) ) . '</h1>';
+		/* translators: %s: table name. */
+		echo '<h1>' . esc_html( $post_id > 0 ? sprintf( __( 'Automatic sync: %s', 'tablerefresh' ), '' !== $name ? $name : $table_id ) : __( 'Set up automatic sync', 'tablerefresh' ) ) . '</h1>';
 		echo '<p><a href="' . esc_url( self::url() ) . '">&larr; ' . esc_html__( 'All tables', 'tablerefresh' ) . '</a></p>';
 		self::print_notice();
 		if ( ! empty( $form['error'] ) ) {
@@ -339,9 +346,11 @@ final class Admin {
 
 		echo '<h2>' . esc_html__( 'Status', 'tablerefresh' ) . '</h2>';
 		echo '<p>' . self::schedule_summary( $post_id, (array) $config ) . '</p>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped in schedule_summary().
-		echo '<p>';
-		self::sync_button( $post_id, 'edit' );
-		echo '</p>';
+		if ( Sync_Config::ATTENTION_CONFLICT !== $config['attention'] ) {
+			echo '<p>';
+			self::sync_button( $post_id, 'edit' );
+			echo '</p>';
+		}
 		self::render_history( $post_id );
 
 		echo '<h2>' . esc_html__( 'Stop syncing this table', 'tablerefresh' ) . '</h2>';

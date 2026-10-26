@@ -206,6 +206,7 @@ class ScheduledSyncTest extends Integration_Test_Case {
 		$this->assertSame( Sync_Runner::MAX_FAILURES, $config['failures'] );
 		$this->assertSame( 0, Scheduler::count_events( $post_id ), 'No endless retries.' );
 		$this->assertStringContainsString( 'paused', Sync_Log::last( $post_id )['message'] );
+		$this->assertStringStartsWith( 'Nothing was found at the source address (HTTP 404).', Sync_Log::last( $post_id )['message'] );
 		$this->assertSame( $before, $this->raw_state( $table_id ) );
 
 		// The administrator fixes the source; a successful sync resumes the schedule.
@@ -265,7 +266,7 @@ class ScheduledSyncTest extends Integration_Test_Case {
 
 		$output = shell_exec( 'wp --path=' . escapeshellarg( TABLEREFRESH_TESTS_WP_DIR ) . ' cron event run ' . Scheduler::HOOK . ' 2>&1' );
 		$this->assertStringContainsString( 'Executed', (string) $output );
-		wp_cache_flush(); // The other process changed the cron option and post meta.
+		wp_cache_flush_runtime(); // The other process changed the cron option and post meta.
 		$this->assertSame( 'Pear',$this->load_table( $table_id )['data'][2][0] );
 		$this->assertSame( 'scheduled', Sync_Log::last( $post_id )['trigger'] );
 		$this->assertSame( 1, Scheduler::count_events( $post_id ), 'WP-Cron rescheduled the event once.' );
@@ -280,7 +281,7 @@ class ScheduledSyncTest extends Integration_Test_Case {
 		$code = "define( 'WP_UNINSTALL_PLUGIN', 'tablerefresh/tablerefresh.php' ); include WP_PLUGIN_DIR . '/tablerefresh/uninstall.php';";
 		shell_exec( 'wp --path=' . escapeshellarg( TABLEREFRESH_TESTS_WP_DIR ) . ' eval ' . escapeshellarg( $code ) . ' 2>&1' );
 
-		wp_cache_flush();
+		wp_cache_flush_runtime();
 		global $wpdb;
 		$this->assertSame( 0, (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$wpdb->postmeta} WHERE post_id = %d AND meta_key LIKE %s", $post_id, $wpdb->esc_like( '_tablerefresh_' ) . '%' ) ) );
 		$this->assertFalse( wp_next_scheduled( Scheduler::HOOK, array( $post_id ) ) );
