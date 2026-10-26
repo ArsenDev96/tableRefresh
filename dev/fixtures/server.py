@@ -4,7 +4,6 @@ Only reachable on the private Docker network. Serves deterministic responses
 for success and failure scenarios. Standard library only.
 """
 
-import gzip
 import threading
 import urllib.error
 import urllib.request
@@ -78,16 +77,25 @@ class Handler(BaseHTTPRequestHandler):
             time.sleep(float(_qs(query, "seconds", "30")))
             return self._send(200, b"a,b\n1,2\n")
 
+        # Large bodies are generated in chunks: building hundreds of MB in memory first can take
+        # longer than the client's timeout under memory pressure, and holds the GIL meanwhile.
         if path == "/big":
             size = int(_qs(query, "bytes", "1000000"))
-            row = b"1234567890,abcdefghij,ABCDEFGHIJ\n"
-            body = b"col1,col2,col3\n" + row * (size // len(row) + 1)
-            body = body[:size]
-            return self._send(200, body, content_length=_qs(query, "cl", "1") == "1")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/csv; charset=utf-8")
+            if _qs(query, "cl", "1") == "1":
+                self.send_header("Content-Length", str(size))
+            else:
+                self.send_header("Connection", "close")
+            self.end_headers()
+            if self.command != "HEAD":
+                for part in _repeated(b"col1,col2,col3\n", b"1234567890,abcdefghij,ABCDEFGHIJ\n", size):
+                    self.wfile.write(part)
+            return None
 
         if path == "/gzip":
             size = int(_qs(query, "bytes", "50000000"))
-            body = gzip.compress(b"a,b\n" + b"1,2\n" * (size // 4), compresslevel=9)
+            body = _gzip(_repeated(b"a,b\n", b"1,2\n", 4 + size // 4 * 4))
             return self._send(200, body, headers={"Content-Encoding": "gzip"})
 
         if path.startswith("/google/export/"):
@@ -144,6 +152,23 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, bytes(range(256)) * 8, "application/octet-stream")
 
         return self._send(404, b"Not found", "text/plain")
+
+
+def _repeated(head, row, size):
+    """Yields head + row repeated, cut to size bytes, in chunks of about 1 MB."""
+    block = row * (1024 * 1024 // len(row))
+    part = head
+    while size > 0:
+        part = part[:size]
+        yield part
+        size -= len(part)
+        part = block
+
+
+def _gzip(parts):
+    """gzip container of the concatenated parts."""
+    compressor = zlib.compressobj(9, zlib.DEFLATED, 31)  # 31: gzip container.
+    return b"".join([compressor.compress(part) for part in parts] + [compressor.flush()])
 
 
 _HUGE = []
