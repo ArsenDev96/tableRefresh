@@ -17,6 +17,10 @@
  *   after TableRefresh loaded it, right before TableRefresh's transaction starts.
  * - TABLEREFRESH_TEST_FAULT=human_save_during_write Another process starts saving the table while
  *   TableRefresh's transaction holds the row lock (after TablePress wrote the post).
+ * - TABLEREFRESH_TEST_FAULT=deadlock_before_post_update[_once] A real InnoDB deadlock with another
+ *   connection, right before WordPress writes the table post (on every write, or only the first).
+ * - TABLEREFRESH_TEST_FAULT=connection_lost_before_post_update Another connection kills this one at
+ *   the same point; wpdb reconnects and repeats the next statement outside the transaction.
  * - TABLEREFRESH_TEST_EDITOR_TTL=<seconds>          Lifetime of editor sessions (0: ignore them).
  * - TABLEREFRESH_TEST_NO_TRANSACTIONS=1             Simulate a database without transactions and opt in
  *                                                    to non-atomic updates (refused by default).
@@ -105,6 +109,40 @@ if ( 'kill_after_revision' === $tablerefresh_test_fault ) {
 		20
 	);
 }
+if ( 0 === strpos( $tablerefresh_test_fault, 'deadlock_before_post_update' ) || 'connection_lost_before_post_update' === $tablerefresh_test_fault ) {
+	if ( 'connection_lost_before_post_update' !== $tablerefresh_test_fault ) {
+		tablerefresh_test_prepare_deadlock(); // Before any transaction: DDL would end it.
+		// What another connection (a visitor) sees once WordPress wrote the post, during the write.
+		add_action(
+			'save_post_tablepress_table',
+			static function ( $post_id ) {
+				global $wpdb;
+				if ( tablerefresh_test_is_writing() ) {
+					$other = tablerefresh_test_connect();
+					$row   = mysqli_fetch_row( mysqli_query( $other, "SELECT post_content FROM {$wpdb->posts} WHERE ID = " . (int) $post_id ) );
+					mysqli_close( $other );
+					fwrite( STDERR, 'TEST OBSERVER: ' . $row[0] . "\n" );
+				}
+			}
+		);
+	}
+	// Inside TableRefresh's transaction (the table rows are locked), before the post UPDATE.
+	add_action(
+		'pre_post_update',
+		static function ( $post_id ) use ( $tablerefresh_test_fault ) {
+			static $fired = false;
+			if ( ! tablerefresh_test_is_writing() || ( $fired && 'deadlock_before_post_update_once' === $tablerefresh_test_fault ) ) {
+				return;
+			}
+			$fired = true;
+			if ( 'connection_lost_before_post_update' === $tablerefresh_test_fault ) {
+				tablerefresh_test_kill_connection();
+			} else {
+				tablerefresh_test_deadlock( (int) $post_id );
+			}
+		}
+	);
+}
 if ( 'human_save_before_write' === $tablerefresh_test_fault ) {
 	// After TableRefresh loaded and journaled the table, before its transaction starts.
 	add_action(
@@ -157,6 +195,66 @@ if ( '' !== $tablerefresh_test_fault ) {
 			3
 		);
 	}
+}
+
+/**
+ * Opens a second database connection.
+ *
+ * @return mysqli
+ */
+function tablerefresh_test_connect() {
+	global $wpdb;
+	list( $host, $port ) = $wpdb->parse_db_host( DB_HOST );
+	$other               = mysqli_init();
+	mysqli_real_connect( $other, $host, DB_USER, DB_PASSWORD, DB_NAME, $port ? (int) $port : 3306 );
+	return $other;
+}
+
+/**
+ * Creates the table that the other connection changes in tablerefresh_test_deadlock().
+ */
+function tablerefresh_test_prepare_deadlock() {
+	global $wpdb;
+	$heavy = $wpdb->prefix . 'tablerefresh_test_heavy';
+	$other = tablerefresh_test_connect();
+	mysqli_query( $other, "CREATE TABLE IF NOT EXISTS {$heavy} (id INT PRIMARY KEY, v INT NOT NULL) ENGINE=InnoDB" );
+	mysqli_query( $other, "INSERT IGNORE INTO {$heavy} (id, v) VALUES (" . implode( ',0),(', range( 1, 2000 ) ) . ',0)' );
+	mysqli_close( $other );
+}
+
+/**
+ * Causes a real deadlock between this connection's open transaction (which holds the row lock
+ * of the table post) and another connection. The other transaction changed many more rows, so
+ * InnoDB rolls back this one, as it would for a sync that collides with a bigger write.
+ *
+ * @param int $post_id Table post ID, locked by this connection.
+ */
+function tablerefresh_test_deadlock( $post_id ) {
+	global $wpdb;
+	$heavy = $wpdb->prefix . 'tablerefresh_test_heavy';
+	$other = tablerefresh_test_connect();
+	mysqli_query( $other, 'START TRANSACTION' );
+	mysqli_query( $other, "UPDATE {$heavy} SET v = v + 1" );
+	mysqli_query( $other, "UPDATE {$wpdb->posts} SET post_status = post_status WHERE ID = {$post_id}", MYSQLI_ASYNC ); // Waits for this connection.
+	usleep( 300000 );
+	$wpdb->query( "UPDATE {$heavy} SET v = v + 1 WHERE id = 1" ); // Waits for the other connection: deadlock.
+	fwrite( STDERR, 'TEST FAULT: deadlock: ' . $wpdb->last_error . "\n" );
+	mysqli_reap_async_query( $other );
+	mysqli_query( $other, 'ROLLBACK' );
+	mysqli_close( $other );
+}
+
+/**
+ * Kills this process's database connection from another connection, like a server restart or
+ * a connection timeout. The server rolls back the open transaction.
+ */
+function tablerefresh_test_kill_connection() {
+	global $wpdb;
+	$id    = (int) $wpdb->get_var( 'SELECT CONNECTION_ID()' );
+	$other = tablerefresh_test_connect();
+	mysqli_query( $other, "KILL {$id}" );
+	mysqli_close( $other );
+	fwrite( STDERR, "TEST FAULT: connection {$id} killed\n" );
 }
 
 /**

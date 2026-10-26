@@ -212,6 +212,7 @@ final class Sync_Service {
 			'recovery'          => $recovery['status'],
 			'took_over'         => $lock->took_over(),
 			'revisions_deleted' => isset( $update['revisions_deleted'] ) ? $update['revisions_deleted'] : 0,
+			'attempts'          => $update['attempts'],
 		);
 	}
 

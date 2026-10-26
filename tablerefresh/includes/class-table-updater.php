@@ -29,8 +29,18 @@ defined( 'ABSPATH' ) || exit;
  * rolls back (and, without transactions, restores the snapshot). If the process is killed
  * outright, InnoDB discards the open transaction and the journal remains, so the next sync
  * (or `wp tablerefresh recover`) can confirm or restore the table.
+ *
+ * The database itself can end the transaction early: a deadlock rolls it back, and after a lost
+ * connection wpdb reconnects and repeats the failed statement in a new session. Every later
+ * statement would then be committed on its own. So after any database error or reconnect during
+ * step 3–4, all further writes are blocked, the update is undone, and it is retried.
  */
 final class Table_Updater {
+
+	/**
+	 * How often an update is attempted when the database interrupted the write.
+	 */
+	const MAX_ATTEMPTS = 3;
 
 	/**
 	 * Whether TablePress is currently saving on behalf of TableRefresh.
@@ -84,9 +94,34 @@ final class Table_Updater {
 	 *                               "overwrite": replace it anyway. Concurrent saves during the
 	 *                               write itself always abort.
 	 * }
-	 * @return array{status: string, rows: int, columns: int, atomic: bool}|WP_Error
+	 * @return array{status: string, rows: int, columns: int, atomic: bool, attempts: int}|WP_Error
 	 */
 	public function update( string $table_id, array $data, Table_Lock $lock, array $args = array() ) {
+		for ( $attempt = 1; ; $attempt++ ) {
+			$result = $this->attempt( $table_id, $data, $lock, $args );
+			if ( ! is_wp_error( $result ) ) {
+				return $result + array( 'attempts' => $attempt );
+			}
+			// Retry only when the database interrupted the write and the table is back in its
+			// previous state; the next attempt repeats every check, including conflict detection.
+			$reverted = $result->get_error_data( 'tablerefresh_reverted' );
+			if ( $attempt >= self::MAX_ATTEMPTS || 'tablerefresh_write_interrupted' !== $result->get_error_code() || ( is_array( $reverted ) && empty( $reverted['reverted'] ) ) ) {
+				return $result;
+			}
+			usleep( wp_rand( 50000, 250000 ) * $attempt ); // A deadlock ends when the other transaction finishes.
+		}
+	}
+
+	/**
+	 * One attempt of update().
+	 *
+	 * @param string               $table_id Table ID.
+	 * @param string[][]           $data     Data.
+	 * @param Table_Lock           $lock     Lock.
+	 * @param array<string, mixed> $args     See update().
+	 * @return array{status: string, rows: int, columns: int, atomic: bool}|WP_Error
+	 */
+	private function attempt( string $table_id, array $data, Table_Lock $lock, array $args ) {
 		global $wpdb;
 
 		$on_conflict = isset( $args['on_conflict'] ) && 'overwrite' === $args['on_conflict'] ? 'overwrite' : 'abort';
@@ -174,20 +209,27 @@ final class Table_Updater {
 		 */
 		do_action( 'tablerefresh_before_write', $table_id );
 
-		$this->begin( $table_id, $post_id, $snapshot, $atomic, $lock, $new_state );
+		$this->begin( $table_id, $post_id, $snapshot, $atomic, $lock, $journal['target'] );
 
 		// Failures before the first write only need a rollback; nothing may be restored, because
 		// the table may already hold someone else's newer data.
 		if ( $atomic && false === $wpdb->query( 'START TRANSACTION' ) ) { // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 			return $this->abandon( new WP_Error( 'tablerefresh_transaction_failed', __( 'A database transaction could not be started.', 'tablerefresh' ) ) );
 		}
-		if ( ! $lock->is_held( $atomic ) ) {
+		$held = $lock->is_held( $atomic );
+		if ( self::write_interrupted() ) {
+			return $this->abandon( self::interrupted_error() );
+		}
+		if ( ! $held ) {
 			return $this->abandon( new WP_Error( 'tablerefresh_lock_lost', __( 'The sync lock expired before the table was written. Nothing was changed.', 'tablerefresh' ) ) );
 		}
 
 		// Compare-and-swap: lock the table rows and make sure nobody saved the table since it was
 		// loaded above. A TablePress editor save that starts now waits until this transaction ends.
 		$current = TablePress_Adapter::read_snapshot( $post_id, $atomic );
+		if ( self::write_interrupted() ) {
+			return $this->abandon( self::interrupted_error() );
+		}
 		if ( ! TablePress_Adapter::snapshots_equal( $current, $snapshot ) || $current['post_modified_gmt'] !== $snapshot['post_modified_gmt'] ) {
 			return $this->abandon( self::conflict_error( 'tablerefresh_conflict_concurrent', __( 'The table was saved by someone else while it was being synchronized. Nothing was changed.', 'tablerefresh' ), $existing ) );
 		}
@@ -203,6 +245,9 @@ final class Table_Updater {
 		}
 		Revision_Policy::writing( 0 );
 		self::$writing = false;
+		if ( self::write_interrupted() ) {
+			return $this->abort( self::interrupted_error() );
+		}
 		if ( is_wp_error( $saved ) ) {
 			return $this->abort( $saved );
 		}
@@ -233,6 +278,10 @@ final class Table_Updater {
 			return $this->abort( new WP_Error( 'tablerefresh_verify_failed', __( 'TablePress did not return the imported data after saving. The change was reverted.', 'tablerefresh' ) ) );
 		}
 
+		// A transaction that the database already ended would "commit" successfully.
+		if ( self::write_interrupted() ) {
+			return $this->abort( self::interrupted_error() );
+		}
 		if ( $atomic && false === $wpdb->query( 'COMMIT' ) ) { // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 			return $this->abort( new WP_Error( 'tablerefresh_transaction_failed', __( 'The database transaction could not be committed.', 'tablerefresh' ) ) );
 		}
@@ -397,7 +446,8 @@ final class Table_Updater {
 	 */
 	private function abort( WP_Error $error ): WP_Error {
 		self::$writing = false;
-		$context       = self::$active;
+		self::write_interrupted(); // Record a database error of the last statement in the context.
+		$context = self::$active;
 		$this->end();
 		if ( null === $context ) {
 			return $error;
@@ -425,9 +475,13 @@ final class Table_Updater {
 			$wpdb->query( 'ROLLBACK' ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 		}
 
-		$current  = TablePress_Adapter::read_snapshot( $context['post_id'] );
+		$current = TablePress_Adapter::read_snapshot( $context['post_id'] );
+		$own     = self::is_partial_write( $current, array( 'target' => array( 'state' => $context['target']['state'] ) ), false )
+			// After a database error, statements of this update may have been committed outside the
+			// transaction (also before its baseline): restore if only this update's values are stored.
+			|| ( $context['interrupted'] && self::holds_only_update_values( $current, $context ) );
 		$restored = TablePress_Adapter::snapshots_equal( $current, $context['snapshot'] )
-			|| ! self::is_partial_write( $current, array( 'target' => array( 'state' => $context['new_state'] ) ), false ) // Changed by someone else afterwards.
+			|| ! $own // Changed by someone else afterwards.
 			|| TablePress_Adapter::restore_snapshot( $context['table_id'], $context['post_id'], $context['snapshot'] );
 
 		// Without a transaction, a revision of the failed content may already be stored.
@@ -468,6 +522,34 @@ final class Table_Updater {
 		$hash = is_array( $data ) ? Sync_State::data_hash( $data ) : '';
 		$old  = json_decode( (string) $journal['snapshot']['post_content'], true );
 		return $hash === $journal['target']['data_md5'] || ( is_array( $old ) && Sync_State::data_hash( $old ) === $hash );
+	}
+
+	/**
+	 * Whether every part of the stored table is either its value before or after this update.
+	 *
+	 * @param array<string, string|null>|null $current Current snapshot.
+	 * @param array<string, mixed>            $context Update context.
+	 * @return bool
+	 */
+	private static function holds_only_update_values( ?array $current, array $context ): bool {
+		if ( null === $current ) {
+			return false;
+		}
+		$snapshot   = $context['snapshot'];
+		$target     = $context['target'];
+		$options    = TablePress_Adapter::OPTIONS_META_KEY;
+		$visibility = TablePress_Adapter::VISIBILITY_META_KEY;
+		$state      = Sync_State::META_KEY;
+		$data       = json_decode( (string) $current['post_content'], true );
+		$old        = json_decode( (string) $snapshot['post_content'], true );
+		$hash       = is_array( $data ) ? Sync_State::data_hash( $data ) : '';
+
+		return ( $hash === $target['data_md5'] || ( is_array( $old ) && Sync_State::data_hash( $old ) === $hash ) )
+			&& in_array( $current[ $state ] ?? null, array( null, $snapshot[ $state ] ?? null, $target['state'] ), true )
+			&& ( ( $current[ $visibility ] ?? null ) === ( $snapshot[ $visibility ] ?? null ) || json_decode( (string) ( $current[ $visibility ] ?? '' ), true ) == $target['visibility'] ) // phpcs:ignore Universal.Operators.StrictComparisons.LooseEqual -- int/string-insensitive comparison of visibility flags.
+			&& json_decode( (string) ( $current[ $options ] ?? '' ), true ) == json_decode( (string) ( $snapshot[ $options ] ?? '' ), true ) // phpcs:ignore Universal.Operators.StrictComparisons.LooseEqual -- TablePress normalizes boolean/integer options.
+			&& $current['post_title'] === $snapshot['post_title']
+			&& $current['post_excerpt'] === $snapshot['post_excerpt'];
 	}
 
 	/**
@@ -559,18 +641,23 @@ final class Table_Updater {
 	 * @param array<string, string|null> $snapshot      Snapshot.
 	 * @param bool                       $transactional Whether a transaction is used.
 	 * @param Table_Lock                 $lock          Lock.
-	 * @param string                     $new_state     Baseline value (fingerprint) of this update.
+	 * @param array<string, mixed>       $target        Intended result (journal target), including the
+	 *                                                  baseline value (fingerprint) of this update.
 	 */
-	private function begin( string $table_id, int $post_id, array $snapshot, bool $transactional, Table_Lock $lock, string $new_state ): void {
+	private function begin( string $table_id, int $post_id, array $snapshot, bool $transactional, Table_Lock $lock, array $target ): void {
+		global $wpdb;
 		self::$active = array(
 			'table_id'      => $table_id,
 			'post_id'       => $post_id,
 			'snapshot'      => $snapshot,
 			'transactional' => $transactional,
 			'lock'          => $lock,
-			'new_state'     => $new_state,
+			'target'        => $target,
 			'revision_ids'  => array(),
+			'connection'    => $wpdb->dbh,
+			'interrupted'   => false,
 		);
+		add_filter( 'query', array( __CLASS__, 'guard_query' ), PHP_INT_MAX );
 		// Until the commit, nothing this process reads may enter a persistent object cache:
 		// WordPress re-reads the post while saving it, and if the process dies before the commit,
 		// the database discards the write but a shared cache (Redis, Memcached) would keep
@@ -588,6 +675,7 @@ final class Table_Updater {
 	 * Clears the update context.
 	 */
 	private function end(): void {
+		remove_filter( 'query', array( __CLASS__, 'guard_query' ), PHP_INT_MAX );
 		self::resume_cache_addition();
 		Revision_Policy::writing( 0 );
 		remove_action( '_wp_put_post_revision', array( __CLASS__, 'track_revision' ), 10 );
@@ -602,6 +690,54 @@ final class Table_Updater {
 			wp_suspend_cache_addition( self::$cache_addition_was_suspended );
 			self::$cache_addition_was_suspended = null;
 		}
+	}
+
+	/**
+	 * Whether the database reported an error or the connection was replaced since the write began.
+	 *
+	 * Either can mean that the transaction no longer exists (a deadlock rolls it back; wpdb
+	 * reconnects after a lost connection), so that further statements would be committed one by one.
+	 *
+	 * @return bool
+	 */
+	private static function write_interrupted(): bool {
+		global $wpdb;
+		if ( null === self::$active ) {
+			return false;
+		}
+		if ( ! self::$active['interrupted'] && ( '' !== (string) $wpdb->last_error || $wpdb->dbh !== self::$active['connection'] ) ) {
+			self::$active['interrupted'] = '' !== (string) $wpdb->last_error ? (string) $wpdb->last_error : 'reconnected';
+		}
+		return false !== self::$active['interrupted'];
+	}
+
+	/**
+	 * Blocks every write after the database interrupted the update (filter `query`).
+	 *
+	 * The filter runs before each statement, when `$wpdb->last_error` still holds the result of
+	 * the previous one.
+	 *
+	 * @param string $query SQL statement.
+	 * @return string The statement, or an empty string, which makes wpdb skip it.
+	 */
+	public static function guard_query( $query ) {
+		if ( ! self::write_interrupted() || preg_match( '/^\s*(?:SELECT|SHOW)\s/i', (string) $query ) ) {
+			return $query;
+		}
+		return '';
+	}
+
+	/**
+	 * Error for an update that the database interrupted.
+	 *
+	 * @return WP_Error
+	 */
+	private static function interrupted_error(): WP_Error {
+		return new WP_Error(
+			'tablerefresh_write_interrupted',
+			__( 'A database error interrupted the write (for example, a deadlock with another write or a lost connection). The change was undone.', 'tablerefresh' ),
+			null !== self::$active ? self::$active['interrupted'] : null
+		);
 	}
 
 	/**
@@ -624,9 +760,11 @@ final class Table_Updater {
 		if ( null === self::$active ) {
 			return;
 		}
+		self::write_interrupted();
 		$context       = self::$active;
 		self::$active  = null;
 		self::$writing = false;
+		remove_filter( 'query', array( __CLASS__, 'guard_query' ), PHP_INT_MAX );
 		self::resume_cache_addition();
 		Revision_Policy::writing( 0 );
 		try {

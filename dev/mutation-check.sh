@@ -105,3 +105,23 @@ mutate class-editor-guard.php \
 	"			|| ! wp_verify_nonce( sanitize_key( wp_unslash( \$_POST['_ajax_nonce'] ) ), \TablePress::nonce( 'edit', \$table_id ) )" \
 	"" \
 	"test_forged_save_request" "editor guard without nonce check"
+mutate class-table-updater.php \
+	"		if ( ! self::\$active['interrupted'] && ( '' !== (string) \$wpdb->last_error || \$wpdb->dbh !== self::\$active['connection'] ) ) {" \
+	"		if ( ! self::\$active['interrupted'] && ( \$wpdb->dbh !== self::\$active['connection'] ) ) {" \
+	"TransactionLossTest" "database errors during the write ignored"
+mutate class-table-updater.php \
+	"		if ( ! self::\$active['interrupted'] && ( '' !== (string) \$wpdb->last_error || \$wpdb->dbh !== self::\$active['connection'] ) ) {" \
+	"		if ( ! self::\$active['interrupted'] && ( '' !== (string) \$wpdb->last_error ) ) {" \
+	"test_lost_connection" "reconnects during the write ignored"
+mutate class-table-updater.php \
+	"		return '';" \
+	"		return \$query;" \
+	"TransactionLossTest" "writes not blocked after a database error"
+mutate class-table-updater.php \
+	"			|| ( \$context['interrupted'] && self::holds_only_update_values( \$current, \$context ) );" \
+	"			;" \
+	"test_lost_connection" "statements committed outside the transaction not restored"
+mutate class-table-updater.php \
+	"'tablerefresh_write_interrupted' !== \$result->get_error_code()" \
+	"true" \
+	"test_deadlock_during_the_write_is_rolled_back_and_retried" "no retry after a deadlock"

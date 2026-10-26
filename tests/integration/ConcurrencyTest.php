@@ -43,8 +43,10 @@ class ConcurrencyTest extends Integration_Test_Case {
 		$start = microtime( true );
 		$a     = $this->start_cli( array( 'sync', $first, $url ) );
 		$b     = $this->start_cli( array( 'sync', $second, $url ) );
-		$this->assertSame( 'updated', $this->wait_cli( $a )['json']['status'] );
-		$this->assertSame( 'updated', $this->wait_cli( $b )['json']['status'] );
+		foreach ( array( $a, $b ) as $handle ) {
+			$run = $this->wait_cli( $handle );
+			$this->assertSame( 'updated', $run['json']['status'] ?? null, $run['stdout'] . $run['stderr'] );
+		}
 		$this->assertLessThan( 7, microtime( true ) - $start, 'Different tables must not block each other.' );
 	}
 
