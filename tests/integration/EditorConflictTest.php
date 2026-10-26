@@ -96,6 +96,47 @@ class EditorConflictTest extends Integration_Test_Case {
 		$this->assertSame( 'updated', $this->sync( $table_id, $url )['status'] );
 	}
 
+	public function test_own_editor_session_does_not_block_a_sync_started_by_that_user() {
+		list( $table_id, $url ) = $this->synced_table();
+		$cookie                 = $this->login_cookie();
+		$editor                 = $this->open_editor( $table_id, $cookie ); // admin, e.g. right after creating the table.
+		$this->fixture( 'source.csv', self::V2 );
+
+		// Started by admin (Sync now): not blocked by admin's own session.
+		wp_set_current_user( 1 );
+		$result = $this->sync( $table_id, $url );
+		wp_set_current_user( 0 );
+		$this->assertSame( 'updated', $result['status'] ?? null, is_wp_error( $result ) ? $result->get_error_code() : '' );
+		$this->assertSame( '3', $this->load_table( $table_id )['data'][2][1] );
+
+		// admin's older editor tab cannot overwrite the synchronized data.
+		$editor['data'][1][1] = 'STALE';
+		$response             = $this->save_in_editor( $table_id, $editor, $cookie );
+		$this->assertFalse( $response['success'] );
+		$this->assertSame( '3', $this->load_table( $table_id )['data'][2][1] );
+		$this->assertSame( '1', $this->load_table( $table_id )['data'][1][1] );
+
+		// Another user's open editor still blocks a sync started by admin.
+		$editor_id = wp_insert_user(
+			array(
+				'user_login' => 'tr_editor_' . wp_generate_password( 6, false ),
+				'user_pass'  => wp_generate_password(),
+				'role'       => 'editor',
+			)
+		);
+		try {
+			$this->open_editor( $table_id, $this->login_cookie( $editor_id ) );
+			$this->fixture( 'source.csv', self::V1 );
+			wp_set_current_user( 1 );
+			$result = $this->sync( $table_id, $url );
+			wp_set_current_user( 0 );
+			$this->assertConflict( $result, 'tablerefresh_conflict_editing' );
+		} finally {
+			require_once ABSPATH . 'wp-admin/includes/user.php';
+			wp_delete_user( $editor_id );
+		}
+	}
+
 	public function test_identical_manual_edit_is_adopted_without_conflict() {
 		list( $table_id, $url ) = $this->synced_table();
 		$cookie                 = $this->login_cookie();

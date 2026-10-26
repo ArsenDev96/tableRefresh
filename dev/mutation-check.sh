@@ -200,3 +200,7 @@ mutate class-tablepress-adapter.php \
 	"		if ( '' !== (string) \$wpdb->last_error || ! is_array( \$meta ) ) {" \
 	"		if ( false ) {" \
 	"test_recovery_keeps_a_backup_it_could_not_check" "failed meta read taken for a table without options"
+mutate class-table-updater.php \
+	"		unset( \$editors[ get_current_user_id() ] );" \
+	"		\$editors = array();" \
+	"test_own_editor_session_does_not_block" "editor sessions of other users ignored"

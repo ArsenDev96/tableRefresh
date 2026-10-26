@@ -22,7 +22,7 @@ TableRefresh is an independent add-on for the free [TablePress](https://wordpres
 * "Sync now" updates a table immediately.
 * Each table shows its last result, its last successful sync, and the 10 most recent attempts in plain language.
 * Google Sheets sharing links work as they are; TableRefresh finds the CSV export address itself.
-* Edits made in TablePress are never overwritten without asking: if someone changed a table after the last sync, automatic sync pauses until you decide to keep the changes or replace them with the source data. A table that is open in the TablePress editor is not synchronized.
+* Edits made in TablePress are never overwritten without asking: if someone changed a table after the last sync, automatic sync pauses until you decide to keep the changes or replace them with the source data. A table that someone else has open in the TablePress editor is not synchronized.
 * A sync replaces a table completely or not at all. The complete file is downloaded and checked before anything is written; a failed or interrupted update is undone.
 * Cell content from the source is filtered for unsafe HTML. Formulas and shortcodes from the source are shown as text, not run.
 * At most 5 revisions created by synchronization are kept per table; revisions you create yourself are never deleted.

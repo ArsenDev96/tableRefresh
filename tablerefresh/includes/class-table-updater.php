@@ -316,6 +316,10 @@ final class Table_Updater {
 		}
 
 		$editors = Editor_Guard::active_sessions( $post_id );
+		// The user who starts this sync is not blocked by their own editor session (for example right
+		// after creating the table in TablePress). If they still save an editor tab opened before this
+		// sync, Editor_Guard rejects that save, so the older copy cannot overwrite the new data.
+		unset( $editors[ get_current_user_id() ] );
 		if ( ! empty( $editors ) ) {
 			$error = self::conflict_error( 'tablerefresh_conflict_editing', __( 'The table is open in the TablePress editor. It was not synchronized, so that unsaved changes are not lost.', 'tablerefresh' ), $existing, $state );
 			$names = array();
