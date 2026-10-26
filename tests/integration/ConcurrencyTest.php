@@ -17,9 +17,11 @@ class ConcurrencyTest extends Integration_Test_Case {
 		$url       = $this->fixture( 'slow.csv', "x,y\n1,2\n", 'delay=3' );
 		$revisions = $this->revision_count( $table_id );
 
+		// All five request the lock together, while the first one holds it for the slow download.
+		$barrier = array( 'TABLEREFRESH_TEST_BARRIER' => uniqid( 'same' ) . ':5' );
 		$handles = array();
 		for ( $i = 0; $i < 5; $i++ ) {
-			$handles[] = $this->start_cli( array( 'sync', $table_id, $url ) );
+			$handles[] = $this->start_cli( array( 'sync', $table_id, $url ), $barrier );
 		}
 		$statuses = array();
 		foreach ( $handles as $handle ) {
@@ -40,9 +42,10 @@ class ConcurrencyTest extends Integration_Test_Case {
 		$second = $this->create_table( array( array( 'b' ) ) );
 		$url    = $this->fixture( 'slow.csv', "p,q\n", 'delay=2' );
 
-		$start = microtime( true );
-		$a     = $this->start_cli( array( 'sync', $first, $url ) );
-		$b     = $this->start_cli( array( 'sync', $second, $url ) );
+		$barrier = array( 'TABLEREFRESH_TEST_BARRIER' => uniqid( 'different' ) . ':2' );
+		$start   = microtime( true );
+		$a       = $this->start_cli( array( 'sync', $first, $url ), $barrier );
+		$b       = $this->start_cli( array( 'sync', $second, $url ), $barrier );
 		foreach ( array( $a, $b ) as $handle ) {
 			$run = $this->wait_cli( $handle );
 			$this->assertSame( 'updated', $run['json']['status'] ?? null, $run['stdout'] . $run['stderr'] );

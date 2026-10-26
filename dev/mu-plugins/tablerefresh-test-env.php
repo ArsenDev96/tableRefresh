@@ -35,6 +35,9 @@
  *                                                    to non-atomic updates (refused by default).
  * - TABLEREFRESH_TEST_LOCK_TTL=<seconds>            Shorter lock lifetime for stale-lock tests.
  * - TABLEREFRESH_TEST_BLOCK_FIXTURES=1              Do not allowlist the private fixture host.
+ * - TABLEREFRESH_TEST_BARRIER=<name>:<count>        Once WordPress is loaded, wait (at most 60 s) until
+ *   <count> processes reached the barrier <name>, so that parallel processes start their command
+ *   together however long each one took to boot.
  *
  * @package TableRefresh
  */
@@ -60,6 +63,25 @@ if ( getenv( 'TABLEREFRESH_TEST_LOCK_TTL' ) ) {
 		static function () {
 			return (int) getenv( 'TABLEREFRESH_TEST_LOCK_TTL' );
 		}
+	);
+}
+
+if ( getenv( 'TABLEREFRESH_TEST_BARRIER' ) ) {
+	add_action(
+		'wp_loaded',
+		static function () {
+			list( $name, $count ) = explode( ':', (string) getenv( 'TABLEREFRESH_TEST_BARRIER' ) );
+			$dir                  = sys_get_temp_dir() . '/tablerefresh-barrier-' . preg_replace( '/[^A-Za-z0-9]/', '', $name );
+			if ( ! is_dir( $dir ) ) {
+				@mkdir( $dir ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- Another process may create it first.
+			}
+			touch( $dir . '/' . getmypid() );
+			$deadline = microtime( true ) + 60;
+			while ( count( (array) glob( $dir . '/*' ) ) < (int) $count && microtime( true ) < $deadline ) {
+				usleep( 10000 );
+			}
+		},
+		PHP_INT_MAX
 	);
 }
 

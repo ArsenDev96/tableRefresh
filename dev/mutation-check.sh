@@ -49,6 +49,10 @@ mutate class-table-updater.php \
 	"			\$conflict = \$this->detect_conflict( \$post_id, \$existing, \$state );" \
 	"			\$conflict = null;" \
 	"EditorConflictTest" "no conflict detection"
+mutate class-table-lock.php \
+	"			if ( 1 === \$inserted ) {" \
+	"			if ( true ) {" \
+	"test_only_one_of_several_parallel_processes_writes" "lock acquired without the atomic insert"
 mutate class-table-updater.php \
 	"		if ( ! TablePress_Adapter::snapshots_equal( \$current, \$snapshot ) || \$current['post_modified_gmt'] !== \$snapshot['post_modified_gmt'] ) {" \
 	"		if ( false ) {" \
