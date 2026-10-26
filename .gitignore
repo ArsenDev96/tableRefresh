@@ -4,3 +4,6 @@
 /dev/fixtures/data/*
 !/dev/fixtures/data/.gitkeep
 .phpunit.result.cache
+
+# Release builds (dev/build-zip.sh).
+/dist/

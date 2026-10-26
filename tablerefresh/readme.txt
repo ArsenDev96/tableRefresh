@@ -4,77 +4,132 @@ Tags: tablepress, csv, google sheets, sync, import
 Requires at least: 6.7
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 0.2.0
+Stable tag: 1.0.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Keeps existing TablePress tables in sync with CSV URLs and public Google Sheets. Free, no external services.
+Keep TablePress tables up to date with a CSV file or a public Google Sheet: hourly, daily, weekly, or with one click.
 
 == Description ==
 
-**Pre-release – not yet for production use.**
+TableRefresh fills existing TablePress tables with the data from a CSV file on the web or from a public Google Sheet, and keeps them up to date. Pick a table, paste a link, and choose how often to sync. The table ID, shortcode, name, description, and all table options stay the same, so pages that show the table need no changes.
 
-TableRefresh replaces the data of an existing TablePress table with the contents of a CSV file at a URL, or of a public Google Sheet. The table ID, shortcode, name, description, and all table options are kept.
+TableRefresh is an independent add-on for the free [TablePress](https://wordpress.org/plugins/tablepress/) plugin. It is not made by, affiliated with, or endorsed by TablePress or its developer.
 
-* The complete CSV is downloaded and validated before anything is written.
-* Updates are atomic on supported databases (see below); failed updates are rolled back, interrupted updates are recovered on the next sync.
-* Only one sync per table runs at a time.
-* Manual edits are never overwritten silently: a sync stops if the table was edited after the last sync or is open in the TablePress editor, and the TablePress editor refuses to save an outdated copy over newer synchronized data.
-* Downloads are protected against server-side request forgery (private/reserved addresses, DNS rebinding, redirects), oversized and compressed responses, interrupted downloads, and timeouts.
-* Cell content from the source is filtered with KSES. Formulas and shortcodes from the source are disabled by default and shown as text.
-* At most 5 revisions created by synchronization are kept per table (filter `tablerefresh_revisions_to_keep`); manually created revisions are never deleted.
-* Set up under Tools > TableRefresh: pick a table, paste a CSV or Google Sheets link, and choose hourly, daily, or weekly automatic sync. "Sync now" runs a sync immediately.
-* Each table shows its last result, its last successful sync, and the 10 most recent attempts.
-* If someone changed a table in TablePress after the last sync, automatic sync pauses and you decide: keep the changes (automatic sync is turned off) or replace them with the source data.
-* No telemetry, no external services besides the source URL you configure.
+= Features =
 
-== Requirements and guarantees ==
+* Set up under Tools > TableRefresh: choose a table, paste a CSV or Google Sheets link, choose hourly, daily, or weekly.
+* "Sync now" updates a table immediately.
+* Each table shows its last result, its last successful sync, and the 10 most recent attempts in plain language.
+* Google Sheets sharing links work as they are; TableRefresh finds the CSV export address itself.
+* Edits made in TablePress are never overwritten without asking: if someone changed a table after the last sync, automatic sync pauses until you decide to keep the changes or replace them with the source data. A table that is open in the TablePress editor is not synchronized.
+* A sync replaces a table completely or not at all. The complete file is downloaded and checked before anything is written; a failed or interrupted update is undone.
+* Cell content from the source is filtered for unsafe HTML. Formulas and shortcodes from the source are shown as text, not run.
+* At most 5 revisions created by synchronization are kept per table; revisions you create yourself are never deleted.
+* WP-CLI commands for scripts and server cron jobs.
+* No account, no paid service, no tracking.
+
+= External services =
+
+TableRefresh downloads the data source that you enter: a CSV file at the address you choose, or a Google Sheet from Google's servers (docs.google.com and googleusercontent.com). For each sync, your site sends a normal web request for that address; no data about your site or its visitors is sent. When you use Google Sheets, Google's [Terms of Service](https://policies.google.com/terms) and [Privacy Policy](https://policies.google.com/privacy) apply. TableRefresh contacts no other service.
+
+= Requirements =
 
 * WordPress 6.7 or newer, PHP 7.4 or newer with the cURL extension.
 * The free TablePress plugin, version 3.0 or newer.
-* **Atomic updates require InnoDB** for the posts, postmeta, and options tables, on MySQL or MariaDB. On other storage engines (for example MyISAM) or when the engine cannot be determined, synchronization is refused. The filter `tablerefresh_allow_non_atomic_updates` allows best-effort updates there: failures are still undone from a backup, but a crashed process can leave a partially written table, visible to visitors, until the next sync or `wp tablerefresh recover` restores it. Results report `"atomic": false` in that case.
-* If the database interrupts a write (for example a deadlock with another write, or a lost connection), TableRefresh blocks all further writes of that sync, undoes the change, and retries up to three times. If the connection is lost at the commit itself, the table is re-read to find out whether the commit took effect; a sync is reported as updated only if its data is stored. Database drop-ins that spread queries over several connections (for example HyperDB or LudicrousDB) are not tested; a change of the connection during a write is treated as an interruption, so such setups may fail to sync, but they never keep a partial write.
-* SQLite (for example WordPress Playground) is not supported.
-* Downloads through a WordPress HTTP proxy (`WP_PROXY_HOST`) are refused, because the connection cannot be protected against requests to internal networks. Enable them with the filter `tablerefresh_allow_proxy` only if the proxy itself blocks internal networks. Proxy environment variables are ignored.
+* MySQL or MariaDB with the InnoDB storage engine for the posts, postmeta, and options tables (the WordPress default). On other storage engines, synchronization is refused, because a table could not be updated all at once; see the FAQ. SQLite (for example WordPress Playground) is not supported.
 
-== Known limitations ==
+== Installation ==
 
-* Non-atomic mode (opt-in, see above): besides crashes, another write to the table during the sync's own write (for example by another plugin) is not blocked by row locks; if the sync then fails, its backup is restored over that write. A lock that expires during the write can be taken over. Neither case is covered by tests.
-* Locks expire after 5 minutes (filter `tablerefresh_lock_ttl`). A sync that runs longer, for example a slow download, is refused before it writes. A crashed sync keeps its table locked until the lock expires; its backup is recovered by the next sync after that.
-* Only the TablePress editor's own save is checked against newer synchronized data. Other writers (TablePress import into an existing table, other plugins) can overwrite a sync; the next sync then reports the change as a conflict instead of overwriting it.
-* TableRefresh uses TablePress internals that are not a public API: the table model (`load`, `prepare_table`, `sanitize`, `save`), the table-to-post mapping (`_debug_get_tables()` or the `tablepress_tables` option), the post meta keys for options and visibility, and the editor's AJAX save action and nonce. Verified with the free TablePress 3.0 to 3.4.1; TablePress Pro/Max are not tested.
-* One source per table, CSV only (or a Google Sheet exported as CSV). Sources that need signing in, including private Google Sheets, are not supported.
+1. Install and activate TablePress, if it is not active yet.
+2. Install TableRefresh from Plugins > Add New (search for "TableRefresh"), or upload the ZIP file under Plugins > Add New > Upload Plugin, and activate it.
+3. In TablePress, create the table that should show the data, or use an existing table.
+4. Go to Tools > TableRefresh and click "Set up a table".
+5. Select the table, paste the link to your CSV file or Google Sheet, choose how often to sync, confirm that the current content of the table may be replaced, and click "Save and sync now".
 
-== Usage ==
+For a Google Sheet: in Google Sheets, click Share, set General access to "Anyone with the link", click "Copy link", and paste that link.
 
-Tools > TableRefresh > "Set up a table". The first sync replaces the current content of the table, after you confirm it.
+== Frequently Asked Questions ==
 
-* Google Sheets: click Share, set General access to "Anyone with the link", click Copy link, and paste the link. The link is converted to the CSV export address automatically. Private sheets are not supported. "File > Share > Publish to web" links work as well.
-* Automatic sync uses WordPress scheduled tasks (WP-Cron). They run when someone visits the site, so on sites with few visitors a sync can run later than planned. With `DISABLE_WP_CRON`, syncs run when the server's cron job calls wp-cron.php.
-* A failed sync is not retried before the next scheduled time. After 5 failed syncs in a row, automatic sync pauses until a "Sync now" succeeds.
-* While the table is open in the TablePress editor, a sync waits for the next scheduled time instead of overwriting unsaved changes.
-* Setting up and running syncs requires the `manage_options` capability (filter `tablerefresh_capability`) and TablePress's permission to edit the table.
-* Deactivating TableRefresh stops all automatic syncs and keeps the settings; activating it again resumes them. Deleting the plugin removes its settings and history; TablePress tables keep their current data.
+= Is TableRefresh part of TablePress? =
 
-WP-CLI:
+No. TableRefresh is an independent plugin that works with the free TablePress plugin. Please ask questions about TableRefresh in its own support forum.
 
-`wp tablerefresh sync <table_id> <url> [--delimiter=<comma|semicolon|tab|pipe>] [--strict-columns] [--keep-formulas] [--keep-shortcodes] [--on-conflict=<abort|overwrite>] [--format=json]`
+= Can I use a private Google Sheet? =
 
-`wp tablerefresh recover <table_id>`
+No. The sheet must be shared with "Anyone with the link", or published with File > Share > Publish to web. Anyone who has the link can see the data. Sources that need signing in are not supported.
 
-Google Sheets: share the sheet with "Anyone with the link can view", or use File > Share > Publish to web. Copy the URL from the browser; it is converted to the CSV export URL automatically.
+= Which sheet tab is used? =
 
-How synchronized content appears in the TablePress editor:
+The tab that was open when you copied the link from the browser's address bar (the link contains its "gid"). A link from the Share dialog uses the first tab.
 
-* A cell starting with `=` is stored with TablePress's text prefix, `'=1+1`, and shown as `=1+1` on the page, not calculated.
-* A `[` that could start a shortcode is stored as `&#091;`, for example `&#091;gallery]`, and shown as `[gallery]` on the page, not executed. Other brackets, such as `[ ]` or `list[]`, are kept as they are.
+= Why did a sync run later than planned? =
+
+Automatic syncs use WordPress's scheduled tasks (WP-Cron). They run when someone visits your site, so on sites with few visitors they can run later than planned. For exact times, let a server cron job call wp-cron.php (with DISABLE_WP_CRON set in wp-config.php).
+
+= What happens if someone edits a synchronized table in TablePress? =
+
+The next sync does not overwrite the edit. It stops, and automatic sync pauses. Under Tools > TableRefresh you then choose: keep the changes (automatic sync is turned off) or replace them with the data from the source. In the other direction, if someone opened a table in the TablePress editor before a sync and saves it afterwards, TablePress shows an error and nothing is saved, so the older copy cannot overwrite the synchronized data.
+
+= What happens when a sync fails? =
+
+The table stays as it was, and the history shows why. A failed sync is not retried before the next scheduled time. After 5 failed syncs in a row, automatic sync pauses until a "Sync now" succeeds.
+
+= Does a sync change my table settings? =
+
+No. Only the rows and columns are replaced. The table ID, shortcode, name, description, and table options stay as they are. Rows and columns that were hidden stay hidden where they still exist.
+
+= Are formulas and shortcodes from the source run? =
+
+No. A cell that starts with "=" is shown as text, and a shortcode is shown as text, not run. WP-CLI options can allow them for trusted sources.
+
+= Who can use TableRefresh? =
+
+Users who can manage options (administrators) and who may edit the table in TablePress. The filter `tablerefresh_capability` changes the first requirement.
+
+= My database tables use MyISAM. =
+
+TableRefresh then refuses to sync, because an interrupted update could leave a half-written table that visitors would see. Convert the posts, postmeta, and options tables to InnoDB (the WordPress default). The filter `tablerefresh_allow_non_atomic_updates` allows syncing anyway, at that risk: a failed sync is still undone, but a crash during the update can leave a partially written table until the next sync or `wp tablerefresh recover` repairs it.
+
+= Can I use a proxy server? =
+
+Downloads through a WordPress HTTP proxy (`WP_PROXY_HOST`) are refused, because TableRefresh could not then protect your server against requests to internal networks. If your proxy itself blocks internal networks, allow it with the filter `tablerefresh_allow_proxy`.
+
+= How do I use WP-CLI? =
+
+`wp tablerefresh sync <table_id> <url> [--on-conflict=<abort|overwrite>] [--format=json]` synchronizes a table once; `wp help tablerefresh sync` lists all options. `wp tablerefresh recover <table_id>` finishes or undoes an interrupted update; every sync does this automatically first.
+
+= What is removed when I delete the plugin? =
+
+Deactivating TableRefresh stops all automatic syncs and keeps the settings; activating it again resumes them. Deleting the plugin removes its settings, history, and scheduled tasks. Your TablePress tables keep their current data.
+
+= Known limitations =
+
+* One source per table; CSV data only (Google Sheets are exported as CSV). At most 5 MB per download.
+* "Sync now" runs while you wait, up to about 15 seconds for a slow source.
+* All automatic syncs that are due run one after another in one scheduled-task request. If the server ends that request early, the remaining syncs run with the next scheduled tasks; a sync that was cut off is undone and runs again at its next scheduled time.
+* A sync lock expires after 5 minutes (filter `tablerefresh_lock_ttl`); a sync that would take longer is stopped before it writes.
+* Only the TablePress editor's own "Save Changes" is checked against newer synchronized data. Other ways of writing to a table (for example a TablePress import into an existing table) can overwrite a sync; the next sync then reports the change instead of overwriting it.
+* TableRefresh relies on parts of TablePress that are not an official programming interface. It is tested with the free TablePress 3.0 to 3.4.1; TablePress Pro and Max are not tested.
+* Database drop-ins that spread queries over several database connections (for example HyperDB or LudicrousDB) are not tested; such setups may fail to sync, but never keep a partial update.
+
+== Screenshots ==
+
+1. All synchronized tables with their schedule and last result.
+2. Setting up a table: choose the table, paste a CSV or Google Sheets link, choose how often to sync.
+3. Settings and history of a table.
+4. A table was changed in TablePress after the last sync: keep the changes or replace them with the source data.
+5. The list on a phone.
 
 == Changelog ==
 
-= 0.2.0 =
-* Tools > TableRefresh admin screen: set up, Sync now, history, conflict decisions.
-* Automatic sync with WP-Cron (hourly, daily, weekly).
-* A sync whose connection was lost at the commit is no longer reported as updated.
+= 1.0.0 =
+* First public release.
+* Tools > TableRefresh: set up tables, Sync now, history, and decisions after edits in TablePress.
+* Automatic sync with WordPress scheduled tasks: hourly, daily, or weekly.
+* CSV files and public Google Sheets; atomic updates with recovery of interrupted updates.
 
-= 0.1.0 =
-* Prototype: WP-CLI synchronization, conflict detection, revision retention.
+== Upgrade Notice ==
+
+= 1.0.0 =
+First public release.

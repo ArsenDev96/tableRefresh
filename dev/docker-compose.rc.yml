@@ -1,0 +1,56 @@
+# Clean WordPress site for release candidates: nothing of the development checkout is mounted.
+# Plugins are installed from ZIP files in ../dist (see dev/rc-env.sh). No test mu-plugin, so the
+# production policies apply (for example, no downloads from private networks).
+name: tablerefresh-rc
+
+services:
+  db:
+    image: ${DB_IMAGE:-mariadb:10.11}
+    environment:
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: wordpress
+      MYSQL_PASSWORD: wordpress
+      MYSQL_ROOT_PASSWORD: root
+    volumes:
+      - db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "healthcheck.sh --connect --innodb_initialized"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+
+  wordpress:
+    image: ${WP_IMAGE:-wordpress:php8.4-apache}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8090:80"
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress
+    volumes:
+      - wp:/var/www/html
+
+  cli:
+    image: ${CLI_IMAGE:-wordpress:cli}
+    profiles: ["cli"]
+    user: "33:33"
+    depends_on:
+      - wordpress
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress
+      HOME: /tmp
+    working_dir: /var/www/html
+    volumes:
+      - wp:/var/www/html
+      - ../dist:/dist:ro
+
+volumes:
+  db:
+  wp:

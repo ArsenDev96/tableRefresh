@@ -1,0 +1,878 @@
+# Copyright (C) 2026 TableRefresh contributors
+# This file is distributed under the GPL-2.0-or-later.
+msgid ""
+msgstr ""
+"Project-Id-Version: TableRefresh – Auto Sync for TablePress 1.0.0\n"
+"Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/tablerefresh\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"X-Generator: WP-CLI 2.12.0\n"
+"X-Domain: tablerefresh\n"
+
+#. Plugin Name of the plugin
+#: tablerefresh.php
+msgid "TableRefresh – Auto Sync for TablePress"
+msgstr ""
+
+#. Description of the plugin
+#: tablerefresh.php
+msgid "Keeps existing TablePress tables in sync with CSV files and public Google Sheets, on a schedule or on demand. An independent add-on, not affiliated with TablePress."
+msgstr ""
+
+#. Author of the plugin
+#: tablerefresh.php
+msgid "TableRefresh contributors"
+msgstr ""
+
+#: includes/class-admin.php:98
+msgid "TableRefresh – automatic sync for TablePress tables"
+msgstr ""
+
+#: includes/class-admin.php:99
+#: includes/class-admin.php:191
+#: includes/class-admin.php:222
+msgid "TableRefresh"
+msgstr ""
+
+#: includes/class-admin.php:116
+msgid "Set up"
+msgstr ""
+
+#: includes/class-admin.php:132
+msgid "Syncing…"
+msgstr ""
+
+#. translators: %d: number of tables.
+#: includes/class-admin.php:152
+#, php-format
+msgid "TableRefresh: automatic sync is paused for %d table and needs your decision."
+msgid_plural "TableRefresh: automatic sync is paused for %d tables and needs your decision."
+msgstr[0] ""
+msgstr[1] ""
+
+#: includes/class-admin.php:157
+msgid "Review"
+msgstr ""
+
+#: includes/class-admin.php:223
+#: includes/class-admin.php:234
+msgid "Set up a table"
+msgstr ""
+
+#: includes/class-admin.php:226
+msgid "Keep TablePress tables up to date with a CSV file or a public Google Sheet. TableRefresh replaces the table data with the data from the source; the table name, description, options, and shortcode stay the same."
+msgstr ""
+
+#: includes/class-admin.php:230
+msgid "Get started"
+msgstr ""
+
+#: includes/class-admin.php:231
+msgid "Create the table in TablePress, if it does not exist yet."
+msgstr ""
+
+#: includes/class-admin.php:232
+msgid "Copy the link to your CSV file or Google Sheet."
+msgstr ""
+
+#: includes/class-admin.php:233
+msgid "Choose \"Set up a table\", pick the table, paste the link, and choose how often to sync."
+msgstr ""
+
+#: includes/class-admin.php:236
+msgid "Tables with automatic sync"
+msgstr ""
+
+#: includes/class-admin.php:237
+#: includes/class-admin.php:246
+#: includes/class-admin.php:319
+msgid "Table"
+msgstr ""
+
+#: includes/class-admin.php:238
+#: includes/class-admin.php:249
+msgid "Source"
+msgstr ""
+
+#: includes/class-admin.php:239
+#: includes/class-admin.php:250
+#: includes/class-admin.php:354
+msgid "Automatic sync"
+msgstr ""
+
+#: includes/class-admin.php:240
+#: includes/class-admin.php:251
+msgid "Last sync"
+msgstr ""
+
+#: includes/class-admin.php:241
+msgid "Actions"
+msgstr ""
+
+#. translators: 1: table name, 2: table ID.
+#: includes/class-admin.php:244
+#: includes/class-admin.php:324
+#: includes/class-admin.php:329
+msgid "(no name)"
+msgstr ""
+
+#. translators: %s: table ID.
+#: includes/class-admin.php:248
+#, php-format
+msgid "Table ID %s"
+msgstr ""
+
+#: includes/class-admin.php:255
+msgid "Review changes"
+msgstr ""
+
+#: includes/class-admin.php:259
+msgid "Settings and history"
+msgstr ""
+
+#. translators: %s: table name.
+#: includes/class-admin.php:286
+#, php-format
+msgid "Automatic sync: %s"
+msgstr ""
+
+#. translators: %s: table name.
+#: includes/class-admin.php:286
+msgid "Set up automatic sync"
+msgstr ""
+
+#: includes/class-admin.php:287
+msgid "All tables"
+msgstr ""
+
+#: includes/class-admin.php:306
+msgid "There are no TablePress tables yet. Create a table in TablePress first; TableRefresh fills existing tables."
+msgstr ""
+
+#: includes/class-admin.php:306
+msgid "All your TablePress tables are already set up for automatic sync. To sync another table, create it in TablePress first."
+msgstr ""
+
+#: includes/class-admin.php:307
+msgid "Add a table in TablePress"
+msgstr ""
+
+#: includes/class-admin.php:321
+msgid "— Select a table —"
+msgstr ""
+
+#. translators: 1: table name, 2: table ID.
+#: includes/class-admin.php:324
+#: includes/class-admin.php:329
+#, php-format
+msgid "%1$s (ID %2$s)"
+msgstr ""
+
+#: includes/class-admin.php:336
+msgid "Open in TablePress"
+msgstr ""
+
+#: includes/class-admin.php:340
+msgid "Data source"
+msgstr ""
+
+#: includes/class-admin.php:342
+msgid "The link to a CSV file, or a Google Sheets link."
+msgstr ""
+
+#: includes/class-admin.php:343
+msgid "Google Sheets: click Share, set General access to \"Anyone with the link\", then click Copy link and paste it here. To use a tab other than the first one, open that tab before copying the link from the address bar."
+msgstr ""
+
+#: includes/class-admin.php:344
+msgid "Private Google Sheets are not supported."
+msgstr ""
+
+#: includes/class-admin.php:344
+msgid "Anyone who has the link can see the data of the sheet."
+msgstr ""
+
+#: includes/class-admin.php:347
+msgid "How often"
+msgstr ""
+
+#: includes/class-admin.php:351
+msgid "WordPress runs scheduled tasks when someone visits the site. On sites with few visitors, a sync can run later than planned."
+msgstr ""
+
+#: includes/class-admin.php:354
+msgid "Sync automatically"
+msgstr ""
+
+#: includes/class-admin.php:355
+msgid "Turn this off to keep the settings and sync only when you click \"Sync now\"."
+msgstr ""
+
+#: includes/class-admin.php:358
+msgid "Replace table data"
+msgstr ""
+
+#: includes/class-admin.php:358
+msgid "Replace the current content of this table with the data from the source."
+msgstr ""
+
+#: includes/class-admin.php:359
+msgid "The rows and columns of the table are overwritten. After that, TableRefresh never overwrites changes that someone makes to the table in TablePress without asking you."
+msgstr ""
+
+#: includes/class-admin.php:362
+msgid "Save and sync now"
+msgstr ""
+
+#: includes/class-admin.php:362
+msgid "Save changes"
+msgstr ""
+
+#: includes/class-admin.php:369
+msgid "Status"
+msgstr ""
+
+#: includes/class-admin.php:378
+msgid "Stop syncing this table"
+msgstr ""
+
+#: includes/class-admin.php:379
+msgid "Removes the sync settings and history. The table and its current data stay as they are."
+msgstr ""
+
+#: includes/class-admin.php:380
+msgid "Remove automatic sync"
+msgstr ""
+
+#: includes/class-admin.php:392
+msgid "This table was changed in TablePress"
+msgstr ""
+
+#: includes/class-admin.php:393
+msgid "Someone changed the table data in TablePress after the last sync. To keep those changes, TableRefresh did not update the table and paused automatic sync. Choose what to do:"
+msgstr ""
+
+#: includes/class-admin.php:395
+#: includes/class-admin.php:396
+msgid "Keep the changes"
+msgstr ""
+
+#: includes/class-admin.php:395
+msgid "The table stays as it is and automatic sync is turned off."
+msgstr ""
+
+#: includes/class-admin.php:398
+msgid "Use the source data"
+msgstr ""
+
+#: includes/class-admin.php:398
+msgid "The changes made in TablePress are replaced with the current data from the source, and automatic sync continues."
+msgstr ""
+
+#: includes/class-admin.php:402
+msgid "I understand that the changes made in TablePress will be lost."
+msgstr ""
+
+#: includes/class-admin.php:403
+msgid "Replace with source data"
+msgstr ""
+
+#: includes/class-admin.php:406
+msgid "Automatic sync is paused"
+msgstr ""
+
+#. translators: %d: number of attempts.
+#: includes/class-admin.php:408
+#, php-format
+msgid "The last %d syncs failed, so automatic sync was paused. The table was not changed. Check the details below and the data source, then click \"Sync now\". A successful sync turns automatic sync back on."
+msgstr ""
+
+#: includes/class-admin.php:420
+#: includes/class-admin.php:435
+msgid "Recent syncs"
+msgstr ""
+
+#. translators: %s: date and time.
+#: includes/class-admin.php:423
+#, php-format
+msgid "Last successful sync: %s"
+msgstr ""
+
+#: includes/class-admin.php:426
+msgid "No syncs yet."
+msgstr ""
+
+#: includes/class-admin.php:430
+#: includes/class-admin.php:528
+msgid "Sync now"
+msgstr ""
+
+#: includes/class-admin.php:431
+msgid "Automatic"
+msgstr ""
+
+#: includes/class-admin.php:432
+msgid "Setup"
+msgstr ""
+
+#: includes/class-admin.php:433
+msgid "Replaced changes"
+msgstr ""
+
+#: includes/class-admin.php:436
+#: includes/class-admin.php:440
+msgid "When"
+msgstr ""
+
+#: includes/class-admin.php:436
+#: includes/class-admin.php:441
+msgid "Started by"
+msgstr ""
+
+#: includes/class-admin.php:436
+#: includes/class-admin.php:442
+msgid "Result"
+msgstr ""
+
+#: includes/class-admin.php:436
+#: includes/class-admin.php:443
+msgid "Table data changed"
+msgstr ""
+
+#: includes/class-admin.php:436
+#: includes/class-admin.php:444
+msgid "Details"
+msgstr ""
+
+#: includes/class-admin.php:443
+msgid "Yes"
+msgstr ""
+
+#: includes/class-admin.php:443
+msgid "No"
+msgstr ""
+
+#: includes/class-admin.php:459
+msgid "Paused: needs your decision"
+msgstr ""
+
+#: includes/class-admin.php:462
+msgid "Off (only \"Sync now\")"
+msgstr ""
+
+#. translators: %s: time span, e.g. "5 hours".
+#: includes/class-admin.php:470
+#, php-format
+msgid "Next sync in about %s"
+msgstr ""
+
+#: includes/class-admin.php:471
+msgid "Next sync: waiting for WordPress to run scheduled tasks"
+msgstr ""
+
+#: includes/class-admin.php:487
+msgid "Not synced yet"
+msgstr ""
+
+#. translators: %s: time span, e.g. "5 minutes".
+#: includes/class-admin.php:490
+#, php-format
+msgid "%s ago"
+msgstr ""
+
+#. translators: %s: time span, e.g. "5 minutes".
+#: includes/class-admin.php:495
+#, php-format
+msgid "Last successful sync %s ago"
+msgstr ""
+
+#: includes/class-admin.php:509
+msgid "Updated"
+msgstr ""
+
+#: includes/class-admin.php:510
+msgid "No changes"
+msgstr ""
+
+#: includes/class-admin.php:511
+msgid "Not updated"
+msgstr ""
+
+#: includes/class-admin.php:512
+msgid "Failed"
+msgstr ""
+
+#: includes/class-admin.php:552
+msgid "This site runs WordPress scheduled tasks through a server cron job (DISABLE_WP_CRON). Automatic syncs run when that job calls wp-cron.php."
+msgstr ""
+
+#: includes/class-admin.php:554
+msgid "Automatic syncs use WordPress scheduled tasks, which run when someone visits the site. On sites with few visitors, a sync can run later than planned."
+msgstr ""
+
+#: includes/class-admin.php:594
+msgid "Select a table."
+msgstr ""
+
+#: includes/class-admin.php:600
+msgid "The table could not be found in TablePress."
+msgstr ""
+
+#: includes/class-admin.php:603
+msgid "This table is already set up for automatic sync."
+msgstr ""
+
+#: includes/class-admin.php:606
+#: includes/class-admin.php:708
+#: includes/class-sync-runner.php:81
+msgid "This table is no longer set up for automatic sync."
+msgstr ""
+
+#: includes/class-admin.php:614
+msgid "Choose how often the table is synchronized."
+msgstr ""
+
+#: includes/class-admin.php:617
+msgid "Confirm that the current content of the table may be replaced with the data from the source."
+msgstr ""
+
+#: includes/class-admin.php:638
+msgid "Settings saved."
+msgstr ""
+
+#: includes/class-admin.php:660
+msgid "Nothing was changed. Confirm that the changes made in TablePress may be replaced."
+msgstr ""
+
+#: includes/class-admin.php:680
+msgid "The changes made in TablePress are kept, and automatic sync is turned off. \"Sync now\" will again stop at these changes until you choose to replace them."
+msgstr ""
+
+#: includes/class-admin.php:691
+msgid "Automatic sync was removed. The table was not changed."
+msgstr ""
+
+#: includes/class-admin.php:731
+msgid "Sorry, you are not allowed to manage the automatic sync of this table."
+msgstr ""
+
+#. translators: 1: table name, 2: result.
+#: includes/class-admin.php:746
+#, php-format
+msgid "%1$s: %2$s"
+msgstr ""
+
+#: includes/class-csv-parser.php:64
+msgid "Unsupported CSV delimiter."
+msgstr ""
+
+#: includes/class-csv-parser.php:71
+msgid "The CSV data is empty."
+msgstr ""
+
+#: includes/class-csv-parser.php:74
+msgid "The data contains binary content and is not a CSV file."
+msgstr ""
+
+#: includes/class-csv-parser.php:77
+msgid "The CSV data is not valid UTF-8. Export the file as \"CSV UTF-8\"."
+msgstr ""
+
+#. translators: %d: line number.
+#: includes/class-csv-parser.php:97
+#, php-format
+msgid "A quoted field starting on line %d is never closed. The file may be truncated or malformed."
+msgstr ""
+
+#. translators: %d: line number.
+#: includes/class-csv-parser.php:112
+#, php-format
+msgid "Unexpected text after a closing quote on line %d."
+msgstr ""
+
+#. translators: %d: line number.
+#: includes/class-csv-parser.php:122
+#, php-format
+msgid "A cell on line %d exceeds the maximum cell size."
+msgstr ""
+
+#: includes/class-csv-parser.php:126
+msgid "The CSV data has more columns than allowed."
+msgstr ""
+
+#: includes/class-csv-parser.php:138
+msgid "The CSV data has more rows than allowed."
+msgstr ""
+
+#: includes/class-csv-parser.php:167
+msgid "The CSV data contains no values."
+msgstr ""
+
+#: includes/class-csv-parser.php:170
+msgid "The CSV data has more cells than allowed."
+msgstr ""
+
+#. translators: 1: row number, 2: number of columns found, 3: expected number of columns.
+#: includes/class-csv-parser.php:180
+#, php-format
+msgid "Row %1$d has %2$d columns, expected %3$d."
+msgstr ""
+
+#: includes/class-editor-guard.php:93
+msgid "TableRefresh synchronized this table after you opened it in the editor. Saving now would overwrite the synchronized data with an older copy, so nothing was saved. Copy your changes, reload the page, and apply them again."
+msgstr ""
+
+#: includes/class-http-fetcher.php:110
+msgid "The PHP cURL extension is required for secure downloads."
+msgstr ""
+
+#: includes/class-http-fetcher.php:125
+#: includes/class-http-fetcher.php:400
+#: includes/class-sync-runner.php:170
+msgid "The source did not respond in time."
+msgstr ""
+
+#: includes/class-http-fetcher.php:138
+msgid "The source sent a redirect without a target."
+msgstr ""
+
+#: includes/class-http-fetcher.php:141
+msgid "The source redirected too many times."
+msgstr ""
+
+#: includes/class-http-fetcher.php:147
+msgid "Google redirected to a sign-in page. The sheet is not shared publicly (\"Anyone with the link\") or not published to the web."
+msgstr ""
+
+#. translators: %d: HTTP status code.
+#: includes/class-http-fetcher.php:156
+#, php-format
+msgid "The source responded with HTTP status %d."
+msgstr ""
+
+#: includes/class-http-fetcher.php:168
+msgid "The source returned a web page (HTML) instead of CSV data. Check that the URL is a direct CSV export link and that the sheet is public."
+msgstr ""
+
+#. translators: %s: MIME type.
+#: includes/class-http-fetcher.php:174
+#, php-format
+msgid "The source returned unsupported content (%s) instead of CSV data."
+msgstr ""
+
+#: includes/class-http-fetcher.php:213
+msgid "WordPress is configured to use an HTTP proxy for this URL. Downloads through a proxy cannot be protected against requests to internal networks, so the source was not downloaded."
+msgstr ""
+
+#: includes/class-http-fetcher.php:268
+msgid "The download did not use the cURL transport (or was intercepted by another plugin), so it could not be secured and was discarded."
+msgstr ""
+
+#: includes/class-http-fetcher.php:274
+msgid "The connection was not made to the verified address and was discarded."
+msgstr ""
+
+#: includes/class-http-fetcher.php:406
+msgid "The download was interrupted before the source was received completely."
+msgstr ""
+
+#: includes/class-http-fetcher.php:409
+msgid "The source server could not be reached."
+msgstr ""
+
+#: includes/class-http-fetcher.php:414
+msgid "A secure (TLS) connection to the source could not be established."
+msgstr ""
+
+#: includes/class-http-fetcher.php:418
+msgid "WordPress rejected the URL as unsafe."
+msgstr ""
+
+#: includes/class-http-fetcher.php:421
+msgid "The source could not be downloaded."
+msgstr ""
+
+#: includes/class-http-fetcher.php:430
+msgid "The source is larger than the allowed maximum size."
+msgstr ""
+
+#. translators: %s: minimum TablePress version.
+#: includes/class-plugin.php:66
+#, php-format
+msgid "TableRefresh – Auto Sync for TablePress requires the free TablePress plugin, version %s or newer, to be installed and active."
+msgstr ""
+
+#: includes/class-sync-config.php:98
+msgid "Enter the address of a CSV file or a Google Sheets link."
+msgstr ""
+
+#: includes/class-sync-config.php:102
+msgid "Enter a complete web address that starts with https:// (or http://)."
+msgstr ""
+
+#: includes/class-sync-config.php:105
+msgid "Addresses with a user name or password are not supported. Use a public link."
+msgstr ""
+
+#: includes/class-sync-config.php:129
+msgid "Google Sheets"
+msgstr ""
+
+#: includes/class-sync-config.php:143
+msgid "Every hour"
+msgstr ""
+
+#: includes/class-sync-config.php:144
+msgid "Once a day"
+msgstr ""
+
+#: includes/class-sync-config.php:145
+msgid "Once a week"
+msgstr ""
+
+#: includes/class-sync-runner.php:64
+msgid "This table no longer exists or is not set up for automatic sync."
+msgstr ""
+
+#: includes/class-sync-runner.php:68
+msgid "Automatic sync is paused for this table."
+msgstr ""
+
+#: includes/class-sync-runner.php:76
+msgid "This table is being synchronized right now. Try again in a minute."
+msgstr ""
+
+#. translators: %d: number of attempts.
+#: includes/class-sync-runner.php:94
+#, php-format
+msgid "Automatic sync is paused after %d failed attempts in a row."
+msgstr ""
+
+#. translators: 1: number of rows, 2: number of columns.
+#: includes/class-sync-runner.php:103
+#, php-format
+msgid "The table was updated: %1$d row, %2$d columns."
+msgid_plural "The table was updated: %1$d rows, %2$d columns."
+msgstr[0] ""
+msgstr[1] ""
+
+#: includes/class-sync-runner.php:104
+msgid "The source has not changed. The table was left as it is."
+msgstr ""
+
+#: includes/class-sync-runner.php:109
+msgid "An earlier sync that had been interrupted was finished first."
+msgstr ""
+
+#: includes/class-sync-runner.php:132
+msgid "The table was changed in TablePress after the last sync. To keep those changes, the table was not updated and automatic sync is paused until you decide what to do."
+msgstr ""
+
+#: includes/class-sync-runner.php:138
+msgid "The table is open in the TablePress editor. It was not updated, so that unsaved changes are not lost. The next sync will try again."
+msgstr ""
+
+#. translators: %s: comma-separated user names.
+#: includes/class-sync-runner.php:140
+#, php-format
+msgid "The table is open in the TablePress editor (%s). It was not updated, so that unsaved changes are not lost. The next sync will try again."
+msgstr ""
+
+#: includes/class-sync-runner.php:143
+msgid "The table was saved in TablePress while it was being synchronized. It was not updated."
+msgstr ""
+
+#: includes/class-sync-runner.php:146
+msgid "This Google Sheet is not public. In Google Sheets, click Share, set General access to \"Anyone with the link\", and try again. Private sheets are not supported."
+msgstr ""
+
+#: includes/class-sync-runner.php:150
+msgid "Google returned a web page instead of the sheet data. Check that the sheet is shared with \"Anyone with the link\". Private sheets are not supported."
+msgstr ""
+
+#: includes/class-sync-runner.php:151
+msgid "The address returned a web page instead of CSV data. Use the direct link to the CSV file."
+msgstr ""
+
+#. translators: %d: HTTP status code.
+#: includes/class-sync-runner.php:158
+#, php-format
+msgid "Nothing was found at the source address (HTTP %d). Check the link."
+msgstr ""
+
+#. translators: %d: HTTP status code.
+#: includes/class-sync-runner.php:161
+#, php-format
+msgid "The source refused access (HTTP %d). The file must be publicly available without signing in."
+msgstr ""
+
+#. translators: %d: HTTP status code.
+#: includes/class-sync-runner.php:164
+#, php-format
+msgid "The source server reported an error (HTTP %d). This is often temporary."
+msgstr ""
+
+#: includes/class-sync-runner.php:174
+msgid "The source could not be reached. Check the address."
+msgstr ""
+
+#: includes/class-sync-runner.php:177
+msgid "The sync took too long and was stopped before it changed the table."
+msgstr ""
+
+#: includes/class-sync-runner.php:180
+msgid "TablePress is not active, so the table could not be synchronized."
+msgstr ""
+
+#. translators: %s: reason.
+#: includes/class-sync-runner.php:187
+#, php-format
+msgid "The downloaded file is not valid CSV: %s"
+msgstr ""
+
+#. translators: %s: table ID.
+#: includes/class-sync-service.php:151
+#, php-format
+msgid "TablePress table \"%s\" does not exist. TableRefresh only updates existing tables."
+msgstr ""
+
+#: includes/class-table-lock.php:86
+msgid "The sync lock could not be created."
+msgstr ""
+
+#: includes/class-table-lock.php:101
+#: includes/class-table-lock.php:112
+#: includes/class-table-lock.php:115
+msgid "Another synchronization of this table is in progress."
+msgstr ""
+
+#: includes/class-table-updater.php:140
+msgid "The storage post of the table could not be determined."
+msgstr ""
+
+#: includes/class-table-updater.php:177
+msgid "The database tables for posts and post meta do not support transactions (InnoDB is required), so the table cannot be updated atomically. Nothing was changed."
+msgstr ""
+
+#: includes/class-table-updater.php:182
+#: includes/class-table-updater.php:224
+msgid "The sync lock expired before the table was written. Nothing was changed."
+msgstr ""
+
+#: includes/class-table-updater.php:202
+msgid "The backup of the table could not be stored, so the table was not changed."
+msgstr ""
+
+#: includes/class-table-updater.php:217
+msgid "A database transaction could not be started."
+msgstr ""
+
+#: includes/class-table-updater.php:234
+msgid "The table was saved by someone else while it was being synchronized. Nothing was changed."
+msgstr ""
+
+#: includes/class-table-updater.php:244
+msgid "Saving the table failed with an exception."
+msgstr ""
+
+#: includes/class-table-updater.php:274
+msgid "The saved table did not match the imported data. The change was reverted."
+msgstr ""
+
+#: includes/class-table-updater.php:278
+msgid "TablePress did not return the imported data after saving. The change was reverted."
+msgstr ""
+
+#: includes/class-table-updater.php:286
+msgid "The database transaction could not be committed."
+msgstr ""
+
+#: includes/class-table-updater.php:315
+msgid "The table data was edited after the last synchronization. It was not overwritten. Synchronize with \"overwrite\" to replace the manual changes."
+msgstr ""
+
+#: includes/class-table-updater.php:320
+msgid "The table is open in the TablePress editor. It was not synchronized, so that unsaved changes are not lost."
+msgstr ""
+
+#: includes/class-table-updater.php:404
+msgid "The table could not be read, so an interrupted update could not be checked. The backup was kept and will be checked again on the next sync."
+msgstr ""
+
+#: includes/class-table-updater.php:420
+msgid "An interrupted update could not be undone. The backup was kept."
+msgstr ""
+
+#: includes/class-table-updater.php:475
+msgid "The previous table state could not be confirmed. A backup was kept and will be restored on the next sync."
+msgstr ""
+
+#: includes/class-table-updater.php:760
+msgid "A database error interrupted the write (for example, a deadlock with another write or a lost connection). The change was undone."
+msgstr ""
+
+#. translators: %s: minimum TablePress version.
+#: includes/class-tablepress-adapter.php:67
+#, php-format
+msgid "TablePress %s or newer must be installed, active, and initialized."
+msgstr ""
+
+#. translators: %s: table ID.
+#: includes/class-tablepress-adapter.php:95
+#, php-format
+msgid "TablePress table \"%s\" could not be loaded."
+msgstr ""
+
+#. translators: %s: table ID.
+#: includes/class-tablepress-adapter.php:103
+#, php-format
+msgid "TablePress reports that table \"%s\" is corrupted. It will not be overwritten."
+msgstr ""
+
+#: includes/class-tablepress-adapter.php:205
+msgid "The storage post of the table could not be verified. Nothing was changed."
+msgstr ""
+
+#: includes/class-tablepress-adapter.php:240
+msgid "TablePress rejected the new table data as inconsistent."
+msgstr ""
+
+#: includes/class-tablepress-adapter.php:279
+msgid "TablePress could not save the table."
+msgstr ""
+
+#: includes/class-url-guard.php:68
+msgid "The URL is empty, too long, or contains whitespace or control characters."
+msgstr ""
+
+#: includes/class-url-guard.php:73
+msgid "The URL could not be parsed."
+msgstr ""
+
+#: includes/class-url-guard.php:78
+msgid "Only http:// and https:// URLs are allowed."
+msgstr ""
+
+#: includes/class-url-guard.php:81
+msgid "URLs with embedded user names or passwords are not allowed."
+msgstr ""
+
+#: includes/class-url-guard.php:93
+msgid "The URL uses a port that is not allowed."
+msgstr ""
+
+#: includes/class-url-guard.php:98
+msgid "The URL host name is not allowed."
+msgstr ""
+
+#: includes/class-url-guard.php:103
+msgid "The host name could not be resolved."
+msgstr ""
+
+#: includes/class-url-guard.php:120
+msgid "The URL points to a private, local, or reserved network address."
+msgstr ""
