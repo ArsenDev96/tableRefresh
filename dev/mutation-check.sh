@@ -101,3 +101,7 @@ mutate class-table-updater.php \
 	"		wp_suspend_cache_addition( true );" \
 	"" \
 	"test_killed_write_leaves_no_uncommitted" "uncommitted data cached (needs: sh dev/redis.sh enable)"
+mutate class-editor-guard.php \
+	"			|| ! wp_verify_nonce( sanitize_key( wp_unslash( \$_POST['_ajax_nonce'] ) ), \TablePress::nonce( 'edit', \$table_id ) )" \
+	"" \
+	"test_forged_save_request" "editor guard without nonce check"

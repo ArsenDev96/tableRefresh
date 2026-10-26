@@ -1,0 +1,3 @@
+mysql:5.7.22: SETUP FAILED (see /tmp/tr-mysql-5-7-22-setup.log)
+mysql:8.0: SETUP FAILED (see /tmp/tr-mysql-8-0-setup.log)
+mysql:8.4: SETUP FAILED (see /tmp/tr-mysql-8-4-setup.log)

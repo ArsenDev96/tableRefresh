@@ -18,10 +18,13 @@ defined( 'ABSPATH' ) || exit;
  *
  * - records when a user opens a table in the editor (`tablepress_view_data`, action "edit"),
  *   so that a sync can refuse to run while someone is editing the table;
- * - rejects an editor save (`tablepress_event_pre_save_table` during the AJAX save) if the
- *   table was synchronized after that editor was opened, because saving would silently
- *   overwrite the synchronized data with the stale copy in the browser. TablePress shows the
- *   message in its usual error notice and nothing is written.
+ * - rejects an editor save (the `wp_ajax_tablepress_save_table` request, before TablePress
+ *   handles it) if the table was synchronized after that editor was opened, because saving
+ *   would silently overwrite the synchronized data with the stale copy in the browser.
+ *   TablePress shows the message in its usual error notice and nothing is written.
+ *
+ * The save request is intercepted through WordPress's AJAX action rather than TablePress's
+ * `tablepress_event_pre_save_table`, which only exists since TablePress 3.1.
  */
 final class Editor_Guard {
 
@@ -35,7 +38,7 @@ final class Editor_Guard {
 	 */
 	public static function init(): void {
 		add_filter( 'tablepress_view_data', array( __CLASS__, 'record_editor_session' ), 10, 2 );
-		add_action( 'tablepress_event_pre_save_table', array( __CLASS__, 'guard_editor_save' ) );
+		add_action( 'wp_ajax_tablepress_save_table', array( __CLASS__, 'guard_editor_save' ), 1 ); // Before TablePress (10).
 	}
 
 	/**
@@ -58,14 +61,21 @@ final class Editor_Guard {
 	/**
 	 * Rejects a save from the TablePress editor whose copy of the table predates the last sync.
 	 *
-	 * @param string $table_id Table ID.
+	 * Runs before TablePress's own handler, so it verifies the request the same way TablePress
+	 * does. Invalid requests are left to TablePress, which rejects them; in particular, a forged
+	 * request must not refresh the user's editor session.
 	 */
-	public static function guard_editor_save( $table_id ): void {
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Only reads the AJAX action name; TablePress verified the nonce.
-		if ( ! wp_doing_ajax() || ! isset( $_POST['action'] ) || 'tablepress_save_table' !== $_POST['action'] || get_current_user_id() <= 0 ) {
+	public static function guard_editor_save(): void {
+		if ( ! isset( $_POST['tablepress']['id'], $_POST['_ajax_nonce'] ) || ! TablePress_Adapter::is_available() ) {
 			return;
 		}
-		$post_id = TablePress_Adapter::get_post_id( (string) $table_id );
+		$table_id = preg_replace( '/[^a-zA-Z0-9_-]/', '', (string) wp_unslash( $_POST['tablepress']['id'] ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Sanitized by the allowlist.
+		if ( '' === $table_id
+			|| ! wp_verify_nonce( sanitize_key( wp_unslash( $_POST['_ajax_nonce'] ) ), \TablePress::nonce( 'edit', $table_id ) )
+			|| ! current_user_can( 'tablepress_edit_table', $table_id ) ) {
+			return;
+		}
+		$post_id = TablePress_Adapter::get_post_id( $table_id );
 		if ( $post_id <= 0 ) {
 			return;
 		}

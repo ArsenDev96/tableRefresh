@@ -19,6 +19,14 @@
 			</property>
 		</properties>
 	</rule>
+	<!-- Capabilities registered by TablePress. -->
+	<rule ref="WordPress.WP.Capabilities">
+		<properties>
+			<property name="custom_capabilities" type="array">
+				<element value="tablepress_edit_table"/>
+			</property>
+		</properties>
+	</rule>
 	<rule ref="WordPress.NamingConventions.PrefixAllGlobals">
 		<properties>
 			<property name="prefixes" type="array">

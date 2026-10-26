@@ -134,6 +134,29 @@ class EditorConflictTest extends Integration_Test_Case {
 		$this->assertSame( '3', $this->load_table( $table_id )['data'][2][1], 'The fresh copy contained the synced data.' );
 	}
 
+	public function test_forged_save_request_cannot_refresh_the_editor_session() {
+		list( $table_id, $url ) = $this->synced_table();
+		$cookie                 = $this->login_cookie();
+		$stale                  = $this->open_editor( $table_id, $cookie );
+		$this->fixture( 'source.csv', self::V2 );
+		$this->assertSame( 'updated', $this->sync( $table_id, $url, array( 'on_conflict' => 'overwrite' ) )['status'] );
+
+		// A cross-site request in the user's browser, without a valid nonce.
+		$forged = $this->http(
+			'/wp-admin/admin-ajax.php',
+			$cookie,
+			array(
+				'action'      => 'tablepress_save_table',
+				'_ajax_nonce' => 'invalid',
+				'tablepress'  => array( 'id' => $table_id ),
+			)
+		);
+		$this->assertSame( '-1', trim( $forged ), 'TablePress rejects the forged request.' );
+
+		$stale['data'][1][0] = 'Apricot';
+		$this->assertFalse( $this->save_in_editor( $table_id, $stale, $cookie )['success'], 'The stale editor is still recognized.' );
+	}
+
 	public function test_editor_saved_while_the_source_was_downloading() {
 		list( $table_id ) = $this->synced_table();
 		$slow             = $this->fixture( 'slow.csv', self::V2, 'delay=4' );

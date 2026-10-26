@@ -6,16 +6,17 @@ name: tablerefresh
 
 services:
   db:
-    image: mariadb:10.11
+    # DB_IMAGE/DB_HEALTHCHECK select another server for dev/test-matrix.sh (MySQL or MariaDB).
+    image: ${DB_IMAGE:-mariadb:10.11}
     environment:
-      MARIADB_DATABASE: wordpress
-      MARIADB_USER: wordpress
-      MARIADB_PASSWORD: wordpress
-      MARIADB_ROOT_PASSWORD: root
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: wordpress
+      MYSQL_PASSWORD: wordpress
+      MYSQL_ROOT_PASSWORD: root
     volumes:
       - db:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      test: ["CMD-SHELL", "${DB_HEALTHCHECK:-healthcheck.sh --connect --innodb_initialized}"]
       interval: 3s
       timeout: 5s
       retries: 30
