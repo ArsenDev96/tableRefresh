@@ -30,9 +30,16 @@ TableRefresh replaces the data of an existing TablePress table with the contents
 * WordPress 6.7 or newer, PHP 7.4 or newer with the cURL extension.
 * The free TablePress plugin, version 3.0 or newer.
 * **Atomic updates require InnoDB** for the posts, postmeta, and options tables, on MySQL or MariaDB. On other storage engines (for example MyISAM) or when the engine cannot be determined, synchronization is refused. The filter `tablerefresh_allow_non_atomic_updates` allows best-effort updates there: failures are still undone from a backup, but a crashed process can leave a partially written table, visible to visitors, until the next sync or `wp tablerefresh recover` restores it. Results report `"atomic": false` in that case.
-* If the database interrupts a write (for example a deadlock with another write, or a lost connection), TableRefresh blocks all further writes of that sync, undoes the change, and retries up to three times. Database drop-ins that spread queries over several connections (for example HyperDB or LudicrousDB) are not tested; a change of the connection during a write is treated as an interruption, so such setups may fail to sync, but they never keep a partial write.
+* If the database interrupts a write (for example a deadlock with another write, or a lost connection), TableRefresh blocks all further writes of that sync, undoes the change, and retries up to three times. If the connection is lost at the commit itself, the table is re-read to find out whether the commit took effect; a sync is reported as updated only if its data is stored. Database drop-ins that spread queries over several connections (for example HyperDB or LudicrousDB) are not tested; a change of the connection during a write is treated as an interruption, so such setups may fail to sync, but they never keep a partial write.
 * SQLite (for example WordPress Playground) is not supported.
 * Downloads through a WordPress HTTP proxy (`WP_PROXY_HOST`) are refused, because the connection cannot be protected against requests to internal networks. Enable them with the filter `tablerefresh_allow_proxy` only if the proxy itself blocks internal networks. Proxy environment variables are ignored.
+
+== Known limitations ==
+
+* Non-atomic mode (opt-in, see above): besides crashes, another write to the table during the sync's own write (for example by another plugin) is not blocked by row locks; if the sync then fails, its backup is restored over that write. A lock that expires during the write can be taken over. Neither case is covered by tests.
+* Locks expire after 5 minutes (filter `tablerefresh_lock_ttl`). A sync that runs longer, for example a slow download, is refused before it writes. A crashed sync keeps its table locked until the lock expires; its backup is recovered by the next sync after that.
+* Only the TablePress editor's own save is checked against newer synchronized data. Other writers (TablePress import into an existing table, other plugins) can overwrite a sync; the next sync then reports the change as a conflict instead of overwriting it.
+* TableRefresh uses TablePress internals that are not a public API: the table model (`load`, `prepare_table`, `sanitize`, `save`), the table-to-post mapping (`_debug_get_tables()` or the `tablepress_tables` option), the post meta keys for options and visibility, and the editor's AJAX save action and nonce. Tested with TablePress 3.0 to 3.4.1 (free); TablePress Pro/Max are not tested.
 
 == Usage ==
 

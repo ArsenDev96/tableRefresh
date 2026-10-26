@@ -10,7 +10,7 @@ sh dev/run-tests.sh --group engine       # converts wp_posts/wp_postmeta to MyIS
 sh dev/run-tests.sh --group external     # live Google Sheets (internet)
 sh dev/redis.sh enable                   # persistent object cache; PersistentCacheTest runs only then
 sh dev/redis.sh disable
-sh dev/mutation-check.sh                 # disables each protection; the tests must notice
+sh dev/mutation-check.sh                 # disables each protection; the tests must notice (Python: host, else fixtures container)
 sh dev/test-matrix.sh db                 # MariaDB 10.11/11.4, MySQL 5.7/8.0/8.4
 sh dev/test-matrix.sh tablepress 3.0 3.4.1   # TablePress releases from wordpress.org
 docker compose -f dev/docker-compose.yml down -v   # remove everything
@@ -33,3 +33,6 @@ docker compose -f dev/docker-compose.yml run --rm cli wp tablerefresh sync 1 htt
 - `dev/mu-plugins/tablerefresh-test-env.php` (**dev only, never ship**) allowlists the private `fixtures` host and injects faults and settings through environment variables.
 - `dev/fixtures/server.py` serves CSV, HTML, redirects, Google-shaped exports, slow/hanging, oversized, gzip-bomb, truncated, and binary responses, and runs a forward proxy on port 3128.
 - On Windows bind mounts, Apache's OPcache may not notice file changes; `mutation-check.sh` restarts Apache around each mutation.
+- Parallel-process tests start their commands together through `TABLEREFRESH_TEST_BARRIER`, so slow WordPress boots cannot serialize them.
+- `--repeat` suits tests that run separate `wp` processes; repeating the in-process download tests exceeds PHP's 128 MB `memory_limit` (PHPUnit keeps every repetition), so loop `run-tests.sh` instead.
+- Run one Docker operation at a time: the matrix stops the main project, and parallel runs share one database.

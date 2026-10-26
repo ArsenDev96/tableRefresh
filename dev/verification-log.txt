@@ -1,11 +1,24 @@
-== 2026-10-26 13:59 UTC commit 31ad3db (plugin, tests and dev scripts committed; only docs uncommitted)
--- mutations (Redis enabled, PHP 7.4 / libcurl 7.83):
-caught    no conflict detection -> Tests: 9, Assertions: 106, Failures: 4.
+== 2026-10-26 17:09-18:24 UTC, final verification (Phase 1.5)
+Tested commit: 65d09f6. Plugin code (tablerefresh/includes) identical to 8833132, the last
+production-code commit; 1ff4498, 2406dcf and 65d09f6 changed only tests, test environment
+and fixtures. Fresh environment (docker compose down -v; dev/setup.sh), one Docker operation
+at a time. WordPress 7.1.3, TablePress 3.4.1, MariaDB 10.11.19 unless stated.
+PHP 8.3 = libcurl 8.22.0; PHP 7.4 = libcurl 7.83.1.
+
+-- suites
+PHP 8.3, full suite:                Tests: 211, Assertions: 1363, Skipped: 4 (PersistentCacheTest: no Redis)
+PHP 7.4, full suite:                Tests: 211, Assertions: 1363, Skipped: 4 (same)
+PHP 8.3 + Redis, full suite:        OK (211 tests, 1394 assertions)
+PHP 7.4 + Redis, full suite:        OK (211 tests, 1394 assertions)
+PHP 8.3 + Redis, TransactionLossTest + RecoveryTest: OK (19 tests, 281 assertions)
+
+-- mutations (CLI_SERVICE=cli74, Redis enabled): 27 caught, 0 survived, 0 errors
+caught    no conflict detection -> Tests: 9, Assertions: 107, Failures: 4.
+caught    lock acquired without the atomic insert -> Tests: 1, Assertions: 12, Failures: 1.
 caught    no compare-and-swap -> Tests: 1, Assertions: 4, Failures: 1.
-SURVIVED  restore after compare-and-swap conflict -> OK (1 test, 9 assertions)
+caught    restore after compare-and-swap conflict -> Tests: 1, Assertions: 5, Failures: 1.
 caught    no stale-editor guard -> Tests: 1, Assertions: 12, Failures: 1.
-snippet not found exactly once in tablerefresh/includes/class-table-updater.php
-SURVIVED  restore any outdated journal -> OK (17 tests, 192 assertions)
+caught    restore any outdated journal -> Tests: 17, Assertions: 184, Failures: 2.
 caught    no storage-post verification -> Tests: 1, Assertions: 2, Failures: 1.
 caught    non-atomic updates allowed silently -> Tests: 1, Assertions: 4, Failures: 1.
 caught    journal overwrite -> Tests: 1, Assertions: 3, Failures: 1.
@@ -19,37 +32,67 @@ caught    no decoded-size abort (caught only with libcurl < 8.4: CLI_SERVICE=cli
 caught    truncation not reported -> Tests: 2, Assertions: 4, Failures: 2.
 caught    uncommitted data cached (needs: sh dev/redis.sh enable) -> Tests: 1, Assertions: 6, Failures: 1.
 caught    editor guard without nonce check -> Tests: 1, Assertions: 9, Failures: 1.
-caught    database errors during the write ignored -> Tests: 6, Assertions: 68, Failures: 3.
+caught    database errors during the write ignored -> Tests: 9, Assertions: 106, Failures: 3.
 caught    reconnects during the write ignored -> Tests: 2, Assertions: 11, Failures: 2.
-caught    writes not blocked after a database error -> Tests: 6, Assertions: 73, Failures: 3.
+caught    writes not blocked after a database error -> Tests: 9, Assertions: 111, Failures: 3.
 caught    statements committed outside the transaction not restored -> Tests: 2, Assertions: 24, Failures: 1.
 caught    no retry after a deadlock -> Tests: 1, Assertions: 4, Failures: 1.
 caught    recovery ignores writes committed outside the transaction -> Tests: 1, Assertions: 12, Failures: 1.
--- PHP 8.3 + Redis, full suite: OK (208 tests, 1354 assertions)
--- PHP 8.3 + Redis, TransactionLossTest + RecoveryTest: OK (16 tests, 243 assertions)
--- PHP 7.4, full suite: Tests: 208, Assertions: 1323, Skipped: 4.
--- PHP 8.3, full suite: Tests: 208, Assertions: 1323, Skipped: 4.
--- PHP 8.3, same table, 5 parallel processes x20: 
--- PHP 8.3, different tables in parallel x40: 
--- PHP 7.4, same table x10 / different tables x20:  / 
--- PHP 8.3, TransactionLossTest x5: 
--- PHP 8.3, engine group (MyISAM): 
--- PHP 8.3, external group (live Google): 
--- done 14:21 UTC
+caught    COMMIT repeated after a lost connection trusted -> Tests: 2, Assertions: 10, Failures: 2.
+caught    commit whose confirmation was lost undone -> Tests: 1, Assertions: 5, Failures: 1.
 
--- NOTE: the Docker engine stopped at 14:20 UTC. The empty results above (from "same table" on)
-   and all matrix setups after that time did not run; they are not failures.
--- "restore any outdated journal": the mutation snippet no longer matched commit 31ad3db, so the
-   mutation was not applied (reported SURVIVED in error). Snippet corrected afterwards; rerun pending.
+-- repetitions
+PHP 8.3, same table, 5 parallel processes x20:   OK (20 tests, 320 assertions)
+PHP 8.3, different tables in parallel x40:       OK (40 tests, 280 assertions)
+PHP 7.4, same table x10:                         OK (10 tests, 160 assertions)
+PHP 7.4, different tables x20:                   OK (20 tests, 140 assertions)
+PHP 8.3, ConcurrencyTest + EditorConflictTest x3: OK (39 tests, 546 assertions)
+PHP 8.3, TransactionLossTest x5:                 OK (45 tests, 705 assertions)
+PHP 8.3, RecoveryTest x5:                        OK (50 tests, 700 assertions)
+PHP 7.4, TransactionLossTest x2:                 OK (18 tests, 282 assertions)
 
--- PENDING on commit 31ad3db (or later), in this order:
-   CLI_SERVICE=cli74 sh dev/mutation-check.sh   (with: sh dev/redis.sh enable; or only the corrected mutation)
-   sh dev/run-tests.sh --filter test_only_one_of_several_parallel_processes_writes --repeat 20
-   sh dev/run-tests.sh --filter test_different_tables_sync_in_parallel --repeat 40
-   CLI_SERVICE=cli74 sh dev/run-tests.sh --filter test_only_one_of_several_parallel_processes_writes --repeat 10
-   CLI_SERVICE=cli74 sh dev/run-tests.sh --filter test_different_tables_sync_in_parallel --repeat 20
-   sh dev/run-tests.sh --filter TransactionLossTest --repeat 5
-   sh dev/run-tests.sh --group engine
-   sh dev/run-tests.sh --group external
-   sh dev/test-matrix.sh db
-   sh dev/test-matrix.sh tablepress 3.0 3.0.1 3.0.2 3.0.3 3.0.4 3.1 3.1.1 3.1.2 3.1.3 3.2 3.2.1 3.2.2 3.2.3 3.2.4 3.2.5 3.2.6 3.2.7 3.2.8 3.3 3.3.1 3.3.2 3.3.3 3.3.4 3.4 3.4.1
+-- groups
+PHP 8.3 / 7.4, engine group (MyISAM):            OK (3 tests, 23 assertions) each
+PHP 8.3 / 7.4, external group (live Google):     OK (4 tests, 58 assertions) each
+
+-- matrices (dev/matrix-results.txt, commit 65d09f6)
+Databases: MariaDB 10.11.19, 11.4.13; MySQL 5.7.22, 8.0.46, 8.4.13:
+   each suite Tests: 211, Assertions: 1363, Skipped: 4, no failures; engine group OK (3 tests, 23 assertions)
+TablePress 3.0, 3.0.1, 3.0.2, 3.0.3: same counts, no failures; engine group OK
+TablePress 3.0.4: suite exited 0 (passed); counts not captured, engine group not run (see below)
+TablePress 3.1 - 3.4.1 (20 releases): NOT run on the final code. Postponed to release
+   stabilization (decision of 2026-10-26, start of Phase 2). Last results: 9ad4002 for 3.0, 3.0.4,
+   3.1, 3.2, 3.2.7, 3.3, 3.4.1 (all clean); all 25 only on commits before 9ad4002.
+
+-- defects found and fixed during this verification
+8833132 (plugin): after a connection lost at the COMMIT, wpdb repeated the COMMIT in a new
+   session, where it committed nothing; the sync reported "updated" (atomic: true) and deleted
+   its journal while the table kept the old data. Reproduced on 31ad3db. Now the table is re-read;
+   regression tests: lost before the COMMIT (every attempt / first attempt) and committed but
+   confirmation lost. The "restore after compare-and-swap conflict" mutation survived on 31ad3db
+   (undo()'s fingerprint check already prevented the restore; only the report differed); the
+   conflict test now asserts that no revert is reported.
+1ff4498 (test): the decompression-bomb mutation survived on libcurl 7.83 because this machine
+   decompresses 1 GB in 0.9 s (< the 1.0 s limit). The test now counts decompressed bytes
+   (5.9 MB with the abort, 1,073,745,920 without).
+2406dcf (test env): one of 20 same-table repetitions saw "unchanged" instead of "locked": a
+   process booted > 3 s late, after the winner had released the lock (it correctly wrote
+   nothing). Processes now start together (TABLEREFRESH_TEST_BARRIER). New mutation: lock
+   acquired without the atomic insert (caught).
+65d09f6 (fixtures): /big built a 200 MB body in memory; under memory pressure that took
+   25-33 s, beyond the 15 s client timeout, and blocked the fixture server. Bodies are streamed.
+
+-- runs that do not count
+Runs on 8833132 and 1ff4498 were stopped for the fixes above; one run overlapped with a second
+run on the same database (TaskStop did not end the first script) and was discarded. The
+TablePress matrix was stopped during 3.0.4 (18:21 UTC) when the full matrix was postponed:
+the stop condition matched an older 3.0.4 row, so it fired before 3.0.4 finished; its test
+container was left to finish (exit 0) and only its throwaway project was removed.
+
+-- known residual (not reproduced, not fixed): Table_Updater::undo() treats a table that cannot
+   be read at all as "not this update's write" and reports reverted: true without confirmation.
+   A lost connection does not reach this path in tests (wpdb reconnects, or bails after its
+   retries, ending the process before any report; the journal stays). Fail-closed handling
+   (report "could not be confirmed", keep the journal) is recommended before release.
+
+== Historical results (older commits) are in git history of this file and in dev/matrix-results.txt.
