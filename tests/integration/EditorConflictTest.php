@@ -179,6 +179,7 @@ class EditorConflictTest extends Integration_Test_Case {
 
 		$run = $this->run_cli( array( 'sync', $table_id, $url ), array( 'TABLEREFRESH_TEST_FAULT' => 'human_save_before_write' ) );
 		$this->assertSame( 'tablerefresh_conflict_concurrent', $run['json']['code'], $run['stdout'] . $run['stderr'] );
+		$this->assertArrayNotHasKey( 'tablerefresh_reverted', $run['json']['data'] ?? array(), 'Nothing was written, so no revert may be reported.' );
 
 		$data = $this->load_table( $table_id )['data'];
 		$this->assertSame( 'HUMAN-EDIT', $data[0][0], 'The concurrent save survives; nothing was restored over it.' );

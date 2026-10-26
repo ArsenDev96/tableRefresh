@@ -22,8 +22,8 @@ defined( 'ABSPATH' ) || exit;
  *    with a description of the intended result, in the Journal (committed on its own).
  * 3. Start a database transaction (if posts and postmeta are InnoDB), re-check lock
  *    ownership with SELECT ... FOR UPDATE, and save through TablePress_Table_Model::save().
- * 4. Verify the stored result byte-level and through TablePress, then COMMIT and delete
- *    the journal.
+ * 4. Verify the stored result byte-level and through TablePress, then COMMIT (confirmed by
+ *    re-reading the table if the connection was lost meanwhile) and delete the journal.
  *
  * Any WP_Error, exception, failed verification, exit() or fatal error during step 3–4
  * rolls back (and, without transactions, restores the snapshot). If the process is killed
@@ -284,6 +284,12 @@ final class Table_Updater {
 		}
 		if ( $atomic && false === $wpdb->query( 'COMMIT' ) ) { // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 			return $this->abort( new WP_Error( 'tablerefresh_transaction_failed', __( 'The database transaction could not be committed.', 'tablerefresh' ) ) );
+		}
+		// If the connection was lost at the COMMIT, wpdb repeated it in a new session, where it
+		// succeeds without committing anything. Whether the server committed before the connection
+		// was lost shows in what is stored: this update's unique baseline, or the previous state.
+		if ( self::write_interrupted() && ! self::matches_target( TablePress_Adapter::read_snapshot( $post_id ), $journal ) ) {
+			return $this->abort( self::interrupted_error() );
 		}
 
 		$this->end();

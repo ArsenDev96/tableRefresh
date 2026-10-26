@@ -25,6 +25,11 @@
  *   the same point; wpdb reconnects and repeats the next statement outside the transaction.
  * - TABLEREFRESH_TEST_FAULT=connection_lost_before_post_update_then_kill The same, then SIGKILL once
  *   that repeated post UPDATE was committed.
+ * - TABLEREFRESH_TEST_FAULT=connection_lost_before_commit[_once] Another connection kills this one
+ *   right before TableRefresh's COMMIT (on every attempt, or only the first): the server rolls the
+ *   transaction back, and wpdb repeats the COMMIT in a new session, where it commits nothing.
+ * - TABLEREFRESH_TEST_FAULT=connection_lost_after_commit The server commits, then the connection is
+ *   killed before the client learns it; wpdb repeats the COMMIT in a new session.
  * - TABLEREFRESH_TEST_EDITOR_TTL=<seconds>          Lifetime of editor sessions (0: ignore them).
  * - TABLEREFRESH_TEST_NO_TRANSACTIONS=1             Simulate a database without transactions and opt in
  *                                                    to non-atomic updates (refused by default).
@@ -144,6 +149,36 @@ if ( 0 === strpos( $tablerefresh_test_fault, 'deadlock_before_post_update' ) || 
 			} else {
 				tablerefresh_test_deadlock( (int) $post_id );
 			}
+		}
+	);
+}
+if ( in_array( $tablerefresh_test_fault, array( 'connection_lost_before_commit', 'connection_lost_before_commit_once', 'connection_lost_after_commit' ), true ) ) {
+	$tablerefresh_test_written = false;
+	add_action(
+		'save_post_tablepress_table',
+		static function () use ( &$tablerefresh_test_written ) {
+			if ( tablerefresh_test_is_writing() ) {
+				$tablerefresh_test_written = true;
+			}
+		}
+	);
+	// The COMMIT of TableRefresh's transaction, once TablePress wrote the table in it.
+	add_filter(
+		'query',
+		static function ( $query ) use ( &$tablerefresh_test_written, $tablerefresh_test_fault ) {
+			static $fired = false;
+			if ( ! $tablerefresh_test_written || 'COMMIT' !== trim( (string) $query ) || ( $fired && 'connection_lost_before_commit_once' === $tablerefresh_test_fault ) ) {
+				return $query;
+			}
+			global $wpdb;
+			$tablerefresh_test_written = false;
+			$fired                     = true;
+			if ( 'connection_lost_after_commit' === $tablerefresh_test_fault ) {
+				mysqli_query( $wpdb->dbh, 'COMMIT' ); // The server commits; wpdb never sees the result.
+				fwrite( STDERR, "TEST FAULT: committed\n" );
+			}
+			tablerefresh_test_kill_connection();
+			return $query;
 		}
 	);
 }

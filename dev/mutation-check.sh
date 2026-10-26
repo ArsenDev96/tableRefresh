@@ -12,10 +12,17 @@ reset_opcache() {
 	(cd dev && docker compose restart wordpress >/dev/null 2>&1)
 }
 
+# Python edits the file: on the host if it has one, else in the fixtures container.
+if python -c '' >/dev/null 2>&1; then
+	replace() { python -I - "tablerefresh/includes/$1" "$2" "$3"; }
+else
+	replace() { MSYS_NO_PATHCONV=1 docker compose -f dev/docker-compose.yml run --rm --no-deps -T -v "$(pwd -W 2>/dev/null || pwd)/tablerefresh:/plugin" fixtures python -I - "/plugin/includes/$1" "$2" "$3"; }
+fi
+
 mutate() { # file, exact original, replacement, PHPUnit --filter
 	file="tablerefresh/includes/$1"
 	cp "$file" "$file.orig"
-	python -I - "$file" "$2" "$3" <<'PY'
+	replace "$1" "$2" "$3" <<'PY'
 import sys
 path, old, new = sys.argv[1:4]
 s = open(path, encoding="utf-8").read()
@@ -134,3 +141,11 @@ mutate class-table-updater.php \
 	"			|| ( isset( \$journal['target']['state'] ) && self::holds_only_update_values( \$current, \$journal ) ) ) {" \
 	"			) {" \
 	"test_write_committed_outside_the_transaction" "recovery ignores writes committed outside the transaction"
+mutate class-table-updater.php \
+	"		if ( self::write_interrupted() && ! self::matches_target( TablePress_Adapter::read_snapshot( \$post_id ), \$journal ) ) {" \
+	"		if ( false ) {" \
+	"test_connection_lost_at_the" "COMMIT repeated after a lost connection trusted"
+mutate class-table-updater.php \
+	"		if ( self::write_interrupted() && ! self::matches_target( TablePress_Adapter::read_snapshot( \$post_id ), \$journal ) ) {" \
+	"		if ( self::write_interrupted() ) {" \
+	"test_commit_whose_confirmation_was_lost" "commit whose confirmation was lost undone"

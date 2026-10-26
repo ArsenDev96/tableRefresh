@@ -138,6 +138,53 @@ class TransactionLossTest extends Integration_Test_Case {
 		$this->assertUnchanged( $table_id, $before, $revisions );
 	}
 
+	public function test_connection_lost_at_the_commit_is_not_reported_as_success() {
+		$table_id  = $this->create_table( self::ORIGINAL );
+		$before    = $this->raw_state( $table_id );
+		$revisions = $this->revision_count( $table_id );
+
+		// The server rolls the transaction back; wpdb reconnects and repeats the COMMIT in a new
+		// session, where it succeeds without committing anything.
+		$run = $this->run_cli( array( 'sync', $table_id, $this->fixture( 'new.csv', self::NEW_CSV ) ), array( 'TABLEREFRESH_TEST_FAULT' => 'connection_lost_before_commit' ) );
+		$this->assertSame( 3, substr_count( $run['stderr'], 'TEST FAULT: connection' ), 'Three attempts. ' . $run['stderr'] );
+		$this->assertSame( 'tablerefresh_write_interrupted', $run['json']['code'] ?? null, $run['stdout'] . $run['stderr'] );
+		$this->assertTrue( $run['json']['data']['tablerefresh_reverted']['reverted'] );
+		$this->assertUnchanged( $table_id, $before, $revisions );
+	}
+
+	public function test_connection_lost_at_the_first_commit_is_retried() {
+		$table_id  = $this->create_table( self::ORIGINAL );
+		$revisions = $this->revision_count( $table_id );
+
+		$run = $this->run_cli( array( 'sync', $table_id, $this->fixture( 'new.csv', self::NEW_CSV ) ), array( 'TABLEREFRESH_TEST_FAULT' => 'connection_lost_before_commit_once' ) );
+		$this->assertStringContainsString( 'TEST FAULT: connection', $run['stderr'] );
+		$this->assertSame( 'updated', $run['json']['status'] ?? null, $run['stdout'] . $run['stderr'] );
+		$this->assertSame( 2, $run['json']['attempts'] );
+		$this->assertSame( array( array( 'n1', 'n2', 'n3' ), array( 'v1', 'v2', 'v3' ), array( 'w1', 'w2', 'w3' ) ), $this->load_table( $table_id )['data'] );
+		$this->assertSame( $revisions + 1, $this->revision_count( $table_id ) );
+		$this->assertNull( Journal::read( $table_id ) );
+		$this->assertFalse( Table_Lock::is_locked( $table_id ) );
+		$this->assertSame( 'unchanged', $this->sync( $table_id, $this->fixture( 'new.csv', self::NEW_CSV ) )['status'], 'The baseline belongs to the stored data.' );
+	}
+
+	public function test_commit_whose_confirmation_was_lost_is_kept() {
+		$table_id  = $this->create_table( self::ORIGINAL );
+		$revisions = $this->revision_count( $table_id );
+
+		// The server committed, but the connection was lost before the client learned it: the
+		// write is complete and must be neither undone nor repeated.
+		$run = $this->run_cli( array( 'sync', $table_id, $this->fixture( 'new.csv', self::NEW_CSV ) ), array( 'TABLEREFRESH_TEST_FAULT' => 'connection_lost_after_commit' ) );
+		$this->assertStringContainsString( 'TEST FAULT: committed', $run['stderr'] );
+		$this->assertStringContainsString( 'TEST FAULT: connection', $run['stderr'] );
+		$this->assertSame( 'updated', $run['json']['status'] ?? null, $run['stdout'] . $run['stderr'] );
+		$this->assertSame( 1, $run['json']['attempts'] );
+		$this->assertSame( array( array( 'n1', 'n2', 'n3' ), array( 'v1', 'v2', 'v3' ), array( 'w1', 'w2', 'w3' ) ), $this->load_table( $table_id )['data'] );
+		$this->assertSame( $revisions + 1, $this->revision_count( $table_id ) );
+		$this->assertNull( Journal::read( $table_id ) );
+		$this->assertFalse( Table_Lock::is_locked( $table_id ) );
+		$this->assertSame( 'unchanged', $this->sync( $table_id, $this->fixture( 'new.csv', self::NEW_CSV ) )['status'], 'The baseline belongs to the stored data.' );
+	}
+
 	public function test_lost_connection_without_transactions_is_undone() {
 		$table_id  = $this->create_table( self::ORIGINAL );
 		$before    = $this->raw_state( $table_id );
