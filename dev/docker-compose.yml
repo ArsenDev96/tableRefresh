@@ -25,6 +25,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
     ports:
       - "127.0.0.1:8089:80"
     environment:
@@ -36,8 +38,14 @@ services:
     volumes:
       - wp:/var/www/html
       - ../tablerefresh:/var/www/html/wp-content/plugins/tablerefresh:ro
-      - ../.cache/tablepress-dl/tablepress:/var/www/html/wp-content/plugins/tablepress:ro
+      - ${TABLEPRESS_DIR:-../.cache/tablepress-dl/tablepress}:/var/www/html/wp-content/plugins/tablepress:ro
+      - ../.cache/redis-cache-dl/redis-cache:/var/www/html/wp-content/plugins/redis-cache:ro
       - ./mu-plugins/tablerefresh-test-env.php:/var/www/html/wp-content/mu-plugins/tablerefresh-test-env.php:ro
+
+  # Persistent object cache for cache tests (see dev/redis.sh); unused while the drop-in is disabled.
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
 
   # Serves CSV/HTML/redirect/slow/oversized fixtures on the private Docker network.
   fixtures:
@@ -66,7 +74,8 @@ services:
     volumes:
       - wp:/var/www/html
       - ../tablerefresh:/var/www/html/wp-content/plugins/tablerefresh:ro
-      - ../.cache/tablepress-dl/tablepress:/var/www/html/wp-content/plugins/tablepress:ro
+      - ${TABLEPRESS_DIR:-../.cache/tablepress-dl/tablepress}:/var/www/html/wp-content/plugins/tablepress:ro
+      - ../.cache/redis-cache-dl/redis-cache:/var/www/html/wp-content/plugins/redis-cache:ro
       - ./mu-plugins/tablerefresh-test-env.php:/var/www/html/wp-content/mu-plugins/tablerefresh-test-env.php:ro
       - ../tests:/tests:ro
       - ./fixtures/data:/fixtures-data

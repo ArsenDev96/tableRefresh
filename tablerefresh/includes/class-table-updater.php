@@ -54,6 +54,14 @@ final class Table_Updater {
 	private static bool $shutdown_registered = false;
 
 	/**
+	 * Whether cache additions were suspended before the write began, or null if TableRefresh
+	 * is not suspending them.
+	 *
+	 * @var bool|null
+	 */
+	private static ?bool $cache_addition_was_suspended = null;
+
+	/**
 	 * Whether a guarded TablePress write is in progress (used by tests for fault injection).
 	 *
 	 * @return bool
@@ -563,6 +571,12 @@ final class Table_Updater {
 			'new_state'     => $new_state,
 			'revision_ids'  => array(),
 		);
+		// Until the commit, nothing this process reads may enter a persistent object cache:
+		// WordPress re-reads the post while saving it, and if the process dies before the commit,
+		// the database discards the write but a shared cache (Redis, Memcached) would keep
+		// serving the uncommitted data to every visitor.
+		self::$cache_addition_was_suspended = wp_suspend_cache_addition();
+		wp_suspend_cache_addition( true );
 		add_action( '_wp_put_post_revision', array( __CLASS__, 'track_revision' ), 10, 2 );
 		if ( ! self::$shutdown_registered ) {
 			register_shutdown_function( array( __CLASS__, 'on_shutdown' ) );
@@ -574,9 +588,20 @@ final class Table_Updater {
 	 * Clears the update context.
 	 */
 	private function end(): void {
+		self::resume_cache_addition();
 		Revision_Policy::writing( 0 );
 		remove_action( '_wp_put_post_revision', array( __CLASS__, 'track_revision' ), 10 );
 		self::$active = null;
+	}
+
+	/**
+	 * Ends the cache-addition suspension started in begin().
+	 */
+	private static function resume_cache_addition(): void {
+		if ( null !== self::$cache_addition_was_suspended ) {
+			wp_suspend_cache_addition( self::$cache_addition_was_suspended );
+			self::$cache_addition_was_suspended = null;
+		}
 	}
 
 	/**
@@ -602,6 +627,7 @@ final class Table_Updater {
 		$context       = self::$active;
 		self::$active  = null;
 		self::$writing = false;
+		self::resume_cache_addition();
 		Revision_Policy::writing( 0 );
 		try {
 			self::undo( $context );

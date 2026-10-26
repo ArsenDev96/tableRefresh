@@ -97,3 +97,7 @@ mutate class-http-fetcher.php \
 	"			case 18: // Body shorter than announced, or chunked stream not terminated." \
 	"			case 99918:" \
 	"test_interrupted_downloads" "truncation not reported"
+mutate class-table-updater.php \
+	"		wp_suspend_cache_addition( true );" \
+	"" \
+	"test_killed_write_leaves_no_uncommitted" "uncommitted data cached (needs: sh dev/redis.sh enable)"
