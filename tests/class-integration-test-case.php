@@ -295,10 +295,12 @@ abstract class Integration_Test_Case extends TestCase {
 	 */
 	protected function open_editor( string $table_id, string $cookie ): array {
 		$html = $this->http( '/wp-admin/admin.php?page=tablepress&action=edit&table_id=' . rawurlencode( $table_id ), $cookie );
-		$this->assertSame( 1, preg_match( "/edit_table: '([0-9a-f]+)'/", $html, $nonce ), 'TablePress editor did not load: ' . substr( wp_strip_all_tags( $html ), 0, 300 ) );
+		// TablePress 3.1+ prints "edit_table: '…'," and "\tdata: JSON.parse( '…' ),"; 3.0.x prints
+		// "tp.nonces.edit_table = '…';" and "tp.table.data = JSON.parse( '…' );".
+		$this->assertSame( 1, preg_match( "/edit_table(?:: | = )'([0-9a-f]+)'/", $html, $nonce ), 'TablePress editor did not load: ' . substr( wp_strip_all_tags( $html ), 0, 300 ) );
 		$editor = array( 'nonce' => $nonce[1] );
 		foreach ( array( 'meta', 'data', 'options', 'visibility' ) as $item ) {
-			$this->assertSame( 1, preg_match( "/\\t{$item}: JSON\\.parse\\( '(.*)' \\),\\n/", $html, $match ), "Editor variable {$item} not found." );
+			$this->assertSame( 1, preg_match( "/(?:\\t|tp\\.table\\.){$item}(?:: | = )JSON\\.parse\\( '(.*)' \\)[,;]\\n/", $html, $match ), "Editor variable {$item} not found." );
 			$editor[ $item ] = json_decode( str_replace( array( "\\'", '\\\\' ), array( "'", '\\' ), $match[1] ), true );
 		}
 		return $editor;
