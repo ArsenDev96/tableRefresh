@@ -186,3 +186,17 @@ mutate class-scheduler.php \
 		wp_schedule_event(" \
 	"		wp_schedule_event(" \
 	"test_exactly_one_event" "scheduler: duplicate events"
+mutate class-table-updater.php \
+	"		if ( null === \$current ) {
+			// The table could not be read" \
+	"		if ( false ) {
+			// The table could not be read" \
+	"cannot_be_confirmed|unconfirmed_revert" "revert claimed for a table that could not be read"
+mutate class-table-updater.php \
+	"		if ( null === \$current && \$post_id > 0 && '' !== (string) \$wpdb->last_error ) {" \
+	"		if ( false ) {" \
+	"test_recovery_keeps_a_backup_it_could_not_check" "recovery discards a backup after a read error"
+mutate class-tablepress-adapter.php \
+	"		if ( '' !== (string) \$wpdb->last_error || ! is_array( \$meta ) ) {" \
+	"		if ( false ) {" \
+	"test_recovery_keeps_a_backup_it_could_not_check" "failed meta read taken for a table without options"

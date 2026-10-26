@@ -391,6 +391,7 @@ final class Table_Updater {
 	 *                                        journal was outdated or the table no longer exists).
 	 */
 	public function recover( string $table_id ) {
+		global $wpdb;
 		$journal = Journal::read( $table_id );
 		if ( null === $journal ) {
 			return array( 'status' => 'none' );
@@ -398,6 +399,10 @@ final class Table_Updater {
 
 		$post_id = isset( $journal['post_id'] ) ? (int) $journal['post_id'] : 0;
 		$current = $post_id > 0 ? TablePress_Adapter::read_snapshot( $post_id ) : null;
+		if ( null === $current && $post_id > 0 && '' !== (string) $wpdb->last_error ) {
+			// Only a table that is really gone may lose its journal, not one that could not be read.
+			return new WP_Error( 'tablerefresh_recovery_failed', __( 'The table could not be read, so an interrupted update could not be checked. The backup was kept and will be checked again on the next sync.', 'tablerefresh' ) );
+		}
 		if ( null === $current || ! isset( $journal['snapshot'] ) || TablePress_Adapter::get_post_id( $table_id ) !== $post_id ) {
 			Journal::delete( $table_id ); // The table was deleted or re-mapped meanwhile.
 			return array( 'status' => 'discarded' );
@@ -487,6 +492,12 @@ final class Table_Updater {
 		}
 
 		$current = TablePress_Adapter::read_snapshot( $context['post_id'] );
+		if ( null === $current ) {
+			// The table could not be read (a database error, or it was deleted meanwhile): whether a
+			// partial write of this update remains is unknown. Keep the journal for recovery.
+			TablePress_Adapter::clear_caches( $context['table_id'], $context['post_id'] );
+			return false;
+		}
 		$own     = self::is_partial_write( $current, array( 'target' => array( 'state' => $context['target']['state'] ) ), false )
 			// After a database error, statements of this update may have been committed outside the
 			// transaction (also before its baseline): restore if only this update's values are stored.

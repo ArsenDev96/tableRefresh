@@ -30,6 +30,10 @@
  *   transaction back, and wpdb repeats the COMMIT in a new session, where it commits nothing.
  * - TABLEREFRESH_TEST_FAULT=connection_lost_after_commit The server commits, then the connection is
  *   killed before the client learns it; wpdb repeats the COMMIT in a new session.
+ * - TABLEREFRESH_TEST_FAULT=fail_visibility_meta_then_unreadable Like fail_visibility_meta; after that
+ *   failure, reading the table post for a snapshot fails with a database error.
+ * - TABLEREFRESH_TEST_FAULT=unreadable_table / unreadable_table_meta Reading the table post / its
+ *   meta for a snapshot fails with a database error (e.g. during `wp tablerefresh recover`).
  * - TABLEREFRESH_TEST_EDITOR_TTL=<seconds>          Lifetime of editor sessions (0: ignore them).
  * - TABLEREFRESH_TEST_NO_TRANSACTIONS=1             Simulate a database without transactions and opt in
  *                                                    to non-atomic updates (refused by default).
@@ -204,6 +208,23 @@ if ( in_array( $tablerefresh_test_fault, array( 'connection_lost_before_commit',
 		}
 	);
 }
+if ( in_array( $tablerefresh_test_fault, array( 'fail_visibility_meta_then_unreadable', 'unreadable_table', 'unreadable_table_meta' ), true ) ) {
+	// The snapshot queries of TablePress_Adapter::read_snapshot() fail with a real database error.
+	add_filter(
+		'query',
+		static function ( $query ) use ( $tablerefresh_test_fault ) {
+			global $wpdb;
+			$pattern = 'unreadable_table_meta' === $tablerefresh_test_fault
+				? '/^SELECT meta_key, meta_value FROM \S+ WHERE post_id = \d+ AND meta_key IN \(/'
+				: '/^SELECT post_type, post_title, post_excerpt, post_content, post_modified, post_modified_gmt FROM /';
+			if ( ( 'fail_visibility_meta_then_unreadable' !== $tablerefresh_test_fault || ! empty( $GLOBALS['tablerefresh_test_meta_failed'] ) ) && preg_match( $pattern, (string) $query ) ) {
+				fwrite( STDERR, "TEST FAULT: unreadable\n" );
+				return "SELECT tablerefresh_no_such_column FROM {$wpdb->posts} WHERE 0";
+			}
+			return $query;
+		}
+	);
+}
 if ( 'human_save_before_write' === $tablerefresh_test_fault ) {
 	// After TableRefresh loaded and journaled the table, before its transaction starts.
 	add_action(
@@ -245,11 +266,12 @@ if ( '' !== $tablerefresh_test_fault ) {
 		}
 	);
 
-	if ( 'fail_visibility_meta' === $tablerefresh_test_fault ) {
+	if ( in_array( $tablerefresh_test_fault, array( 'fail_visibility_meta', 'fail_visibility_meta_then_unreadable' ), true ) ) {
 		add_filter(
 			'update_post_metadata',
 			static function ( $check, $object_id, $meta_key ) {
 				if ( '_tablepress_table_visibility' === $meta_key && tablerefresh_test_is_writing() ) {
+					$GLOBALS['tablerefresh_test_meta_failed'] = true;
 					return false;
 				}
 				return $check;

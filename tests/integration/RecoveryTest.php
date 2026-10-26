@@ -34,6 +34,75 @@ class RecoveryTest extends Integration_Test_Case {
 		$this->assertSame( $journal_expected, null !== Journal::read( $table_id ) );
 	}
 
+	public function test_revert_that_cannot_be_confirmed_is_reported_and_keeps_the_backup() {
+		list( $table_id, $url, $before, $revisions ) = $this->prepare_case();
+		$run = $this->run_cli( array( 'sync', $table_id, $url ), array( 'TABLEREFRESH_TEST_FAULT' => 'fail_visibility_meta_then_unreadable' ) );
+		$this->assertStringContainsString( 'TEST FAULT: unreadable', $run['stderr'] );
+		$this->assertSame( 'tablerefresh_table_save_failed', $run['json']['code'] ?? null, $run['stdout'] . $run['stderr'] );
+		$this->assertFalse( $run['json']['data']['tablerefresh_reverted']['reverted'], 'The table could not be read, so no revert may be claimed.' );
+		$this->assertContains( 'tablerefresh_revert_failed', $run['json']['codes'] );
+		$this->assertNotNull( Journal::read( $table_id ), 'The backup is kept.' );
+		$this->assertFalse( Table_Lock::is_locked( $table_id ) );
+
+		$recovered = $this->run_cli( array( 'recover', $table_id ) );
+		$this->assertSame( 'rolled_back', $recovered['json']['status'] ?? null, $recovered['stdout'] . $recovered['stderr'] );
+		$this->assertOriginalState( $table_id, $before, $revisions );
+	}
+
+	public function test_unconfirmed_revert_without_transactions_is_restored_by_recovery() {
+		list( $table_id, $url, $before, $revisions ) = $this->prepare_case();
+		$run = $this->run_cli(
+			array( 'sync', $table_id, $url ),
+			array(
+				'TABLEREFRESH_TEST_FAULT'           => 'fail_visibility_meta_then_unreadable',
+				'TABLEREFRESH_TEST_NO_TRANSACTIONS' => '1',
+			)
+		);
+		$this->assertFalse( $run['json']['data']['tablerefresh_reverted']['reverted'] ?? null, $run['stdout'] . $run['stderr'] );
+		$this->assertNotSame( $before['post_content'], $this->raw_state( $table_id )['post_content'], 'The partial write is still there.' );
+		$this->assertNotNull( Journal::read( $table_id ) );
+
+		$recovered = $this->run_cli( array( 'recover', $table_id ) );
+		$this->assertSame( 'restored', $recovered['json']['status'] ?? null, $recovered['stdout'] . $recovered['stderr'] );
+		$this->assertOriginalState( $table_id, $before, $revisions );
+	}
+
+	/**
+	 * @dataProvider unreadable_parts
+	 */
+	public function test_recovery_keeps_a_backup_it_could_not_check( string $fault ) {
+		list( $table_id, $url, $before, $revisions ) = $this->prepare_case();
+		$this->run_cli(
+			array( 'sync', $table_id, $url ),
+			array(
+				'TABLEREFRESH_TEST_FAULT'           => 'kill_after_post_update',
+				'TABLEREFRESH_TEST_NO_TRANSACTIONS' => '1',
+				'TABLEREFRESH_TEST_LOCK_TTL'        => '2',
+			)
+		);
+		$partial = $this->raw_state( $table_id );
+		$this->assertNotSame( $before['post_content'], $partial['post_content'], 'A partial write of the killed process.' );
+		$this->assertNotNull( Journal::read( $table_id ) );
+		sleep( 3 ); // Lock lifetime of the killed process.
+
+		$run = $this->run_cli( array( 'recover', $table_id ), array( 'TABLEREFRESH_TEST_FAULT' => $fault ) );
+		$this->assertStringContainsString( 'TEST FAULT: unreadable', $run['stderr'] );
+		$this->assertSame( 'tablerefresh_recovery_failed', $run['json']['code'] ?? null, $run['stdout'] . $run['stderr'] );
+		$this->assertNotNull( Journal::read( $table_id ), 'A backup that could not be checked must not be discarded.' );
+		$this->assertSame( $partial, $this->raw_state( $table_id ) );
+
+		$recovered = $this->run_cli( array( 'recover', $table_id ) );
+		$this->assertSame( 'restored', $recovered['json']['status'] ?? null, $recovered['stdout'] . $recovered['stderr'] );
+		$this->assertOriginalState( $table_id, $before, $revisions );
+	}
+
+	public function unreadable_parts(): array {
+		return array(
+			'table post' => array( 'unreadable_table' ),
+			'table meta' => array( 'unreadable_table_meta' ),
+		);
+	}
+
 	public function test_exception_during_save_is_rolled_back() {
 		list( $table_id, $url, $before, $revisions ) = $this->prepare_case();
 		$run = $this->run_cli( array( 'sync', $table_id, $url ), array( 'TABLEREFRESH_TEST_FAULT' => 'throw_after_post_update' ) );

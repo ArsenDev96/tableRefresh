@@ -249,6 +249,23 @@ class ScheduledSyncTest extends Integration_Test_Case {
 		$this->assertSame( 'missing', ( new Sync_Runner() )->run( $post_id, 'scheduled' )['outcome'] );
 	}
 
+	public function test_configuration_follows_a_changed_table_id() {
+		list( $table_id, $post_id ) = $this->configured_table( $this->fixture( 's.csv', self::V1 ) );
+		$new_id                     = 'tr-' . wp_generate_password( 6, false, false );
+		wp_set_current_user( 1 );
+		$this->assertTrue( TablePress::$model_table->change_table_id( $table_id, $new_id ) );
+		wp_set_current_user( 0 );
+		try {
+			$this->assertSame( $new_id, TablePress_Adapter::get_table_id( $post_id ) );
+			$this->run_scheduled( $post_id );
+			$this->assertSame( 'updated', Sync_Log::last( $post_id )['outcome'] );
+			$this->assertSame( 'Pear', $this->load_table( $new_id )['data'][2][0] );
+			$this->assertSame( 1, Scheduler::count_events( $post_id ) );
+		} finally {
+			TablePress::$model_table->delete( $new_id );
+		}
+	}
+
 	public function test_deactivation_keeps_configurations_and_activation_restores_events() {
 		list( , $post_id ) = $this->configured_table( $this->fixture( 's.csv', self::V1 ), 'hourly' );
 		Plugin::deactivate();
@@ -271,6 +288,62 @@ class ScheduledSyncTest extends Integration_Test_Case {
 		$this->assertSame( 'scheduled', Sync_Log::last( $post_id )['trigger'] );
 		$this->assertSame( 1, Scheduler::count_events( $post_id ), 'WP-Cron rescheduled the event once.' );
 		$this->assertGreaterThan( time(), Scheduler::next_run( $post_id ) );
+	}
+
+	/**
+	 * Creates tables with overdue hourly events, as after a quiet night on a low-traffic site.
+	 *
+	 * @param int $count Number of tables.
+	 * @return array<int, array{0: string, 1: int, 2: int}> Table ID, post ID, revisions before.
+	 */
+	private function overdue_tables( int $count ): array {
+		$url    = $this->fixture( 'many.csv', self::V1 );
+		$tables = array();
+		for ( $i = 0; $i < $count; $i++ ) {
+			list( $table_id, $post_id ) = $this->configured_table( $url, 'hourly' );
+			wp_clear_scheduled_hook( Scheduler::HOOK, array( $post_id ) );
+			wp_schedule_event( time() - 120 + $i, 'hourly', Scheduler::HOOK, array( $post_id ) );
+			$tables[] = array( $table_id, $post_id, $this->revision_count( $table_id ) );
+		}
+		return $tables;
+	}
+
+	private function assertEachSyncedOnce( array $tables ): void {
+		wp_cache_flush_runtime();
+		foreach ( $tables as list( $table_id, $post_id, $revisions ) ) {
+			$this->assertSame( 'Pear', $this->load_table( $table_id )['data'][2][0], "Table {$table_id}" );
+			$this->assertSame( $revisions + 1, $this->revision_count( $table_id ), "Table {$table_id} was written once." );
+			$this->assertSame( 1, Scheduler::count_events( $post_id ), "Table {$table_id} has one event." );
+			$this->assertGreaterThan( time(), Scheduler::next_run( $post_id ) );
+			$this->assertContains( Sync_Log::last( $post_id )['outcome'], array( 'updated', 'unchanged' ) );
+			$this->assertFalse( Table_Lock::is_locked( $table_id ) );
+			$this->assertNull( \TableRefresh\Journal::read( $table_id ) );
+		}
+	}
+
+	public function test_many_due_tables_with_overlapping_cron_runners() {
+		$tables = $this->overdue_tables( 25 );
+		$start  = microtime( true );
+		// Two runners at once (WP-CLI ignores WP-Cron's own lock): the worst case of overlapping cron requests.
+		$command = array( 'wp', '--path=' . TABLEREFRESH_TESTS_WP_DIR, 'cron', 'event', 'run', '--due-now' );
+		$runners = array();
+		for ( $i = 0; $i < 2; $i++ ) {
+			$runners[] = proc_open( $command, array( 1 => array( 'pipe', 'w' ), 2 => array( 'pipe', 'w' ) ), $pipes[ $i ] );
+		}
+		foreach ( $runners as $i => $runner ) {
+			$output = stream_get_contents( $pipes[ $i ][1] ) . stream_get_contents( $pipes[ $i ][2] );
+			proc_close( $runner );
+			$this->assertStringNotContainsString( 'Fatal', $output );
+		}
+		fwrite( STDERR, sprintf( "\n[25 tables, 2 cron runners: %.1f s]\n", microtime( true ) - $start ) );
+		$this->assertEachSyncedOnce( $tables );
+	}
+
+	public function test_many_due_tables_through_wp_cron_php() {
+		$tables = $this->overdue_tables( 10 );
+		delete_transient( 'doing_cron' ); // Earlier page loads may have left WP-Cron's lock of a spawn that could not connect.
+		$this->http( '/wp-cron.php' ); // As a server cron job calls it.
+		$this->assertEachSyncedOnce( $tables );
 	}
 
 	public function test_uninstall_removes_tablerefresh_data_but_not_the_table() {

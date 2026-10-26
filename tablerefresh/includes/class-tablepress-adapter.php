@@ -301,7 +301,8 @@ final class TablePress_Adapter {
 	 * @param bool $for_update Lock the rows until the current transaction ends (SELECT ... FOR UPDATE).
 	 *                         Every TablePress save updates the post row first, so this serializes
 	 *                         against concurrent saves from the TablePress editor.
-	 * @return array<string, string|null>|null Null if the post does not exist.
+	 * @return array<string, string|null>|null Null if the post does not exist or could not be read
+	 *                                         (then `$wpdb->last_error` is set).
 	 */
 	public static function read_snapshot( int $post_id, bool $for_update = false ): ?array {
 		global $wpdb;
@@ -314,6 +315,9 @@ final class TablePress_Adapter {
 		}
 		$meta = $wpdb->get_results( $wpdb->prepare( "SELECT meta_key, meta_value FROM {$wpdb->postmeta} WHERE post_id = %d AND meta_key IN (%s, %s, %s) ORDER BY meta_id", $post_id, ...self::SNAPSHOT_META_KEYS ) . $lock, ARRAY_A );
 		// phpcs:enable
+		if ( '' !== (string) $wpdb->last_error || ! is_array( $meta ) ) {
+			return null; // A failed query returns no rows, which would look like a table without options.
+		}
 
 		$snapshot = $post;
 		foreach ( self::SNAPSHOT_META_KEYS as $meta_key ) {
