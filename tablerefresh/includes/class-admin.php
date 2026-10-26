@@ -76,6 +76,21 @@ final class Admin {
 	}
 
 	/**
+	 * URL of the settings and history of a table.
+	 *
+	 * @param int $post_id Table post ID.
+	 * @return string
+	 */
+	private static function edit_url( int $post_id ): string {
+		return self::url(
+			array(
+				'action' => 'edit',
+				'table'  => $post_id,
+			)
+		);
+	}
+
+	/**
 	 * Adds Tools > TableRefresh.
 	 */
 	public static function add_page(): void {
@@ -86,6 +101,7 @@ final class Admin {
 			self::PAGE,
 			array( __CLASS__, 'render_page' )
 		);
+
 		self::$hook = is_string( $hook ) ? $hook : '';
 	}
 
@@ -227,7 +243,7 @@ final class Admin {
 			foreach ( $configs as $post_id => $config ) {
 				$name = isset( $names[ $config['table_id'] ] ) && '' !== $names[ $config['table_id'] ] ? $names[ $config['table_id'] ] : __( '(no name)', 'tablerefresh' );
 				echo '<tr>';
-				echo '<td data-label="' . esc_attr__( 'Table', 'tablerefresh' ) . '"><strong><a href="' . esc_url( self::url( array( 'action' => 'edit', 'table' => $post_id ) ) ) . '">' . esc_html( $name ) . '</a></strong>';
+				echo '<td data-label="' . esc_attr__( 'Table', 'tablerefresh' ) . '"><strong><a href="' . esc_url( self::edit_url( $post_id ) ) . '">' . esc_html( $name ) . '</a></strong>';
 				/* translators: %s: table ID. */
 				echo '<br><span class="description">' . esc_html( sprintf( __( 'Table ID %s', 'tablerefresh' ), $config['table_id'] ) ) . '</span></td>';
 				echo '<td data-label="' . esc_attr__( 'Source', 'tablerefresh' ) . '">' . esc_html( Sync_Config::source_label( $config['url'] ) ) . '</td>';
@@ -236,11 +252,11 @@ final class Admin {
 				echo '<td class="tablerefresh-actions">';
 				if ( Sync_Config::ATTENTION_CONFLICT === $config['attention'] ) {
 					// "Sync now" would stop at the edits again; the decision is on the settings screen.
-					echo '<a href="' . esc_url( self::url( array( 'action' => 'edit', 'table' => $post_id ) ) ) . '" class="button button-primary">' . esc_html__( 'Review changes', 'tablerefresh' ) . '</a>';
+					echo '<a href="' . esc_url( self::edit_url( $post_id ) ) . '" class="button button-primary">' . esc_html__( 'Review changes', 'tablerefresh' ) . '</a>';
 				} else {
 					self::sync_button( $post_id, 'list' );
 				}
-				echo ' <a href="' . esc_url( self::url( array( 'action' => 'edit', 'table' => $post_id ) ) ) . '" class="button">' . esc_html__( 'Settings and history', 'tablerefresh' ) . '</a></td>';
+				echo ' <a href="' . esc_url( self::edit_url( $post_id ) ) . '" class="button">' . esc_html__( 'Settings and history', 'tablerefresh' ) . '</a></td>';
 				echo '</tr>';
 			}
 			echo '</tbody></table>';
@@ -311,7 +327,13 @@ final class Admin {
 		} else {
 			/* translators: 1: table name, 2: table ID. */
 			echo '<strong>' . esc_html( sprintf( __( '%1$s (ID %2$s)', 'tablerefresh' ), '' !== $name ? $name : __( '(no name)', 'tablerefresh' ), $table_id ) ) . '</strong>';
-			echo ' <a href="' . esc_url( TablePress_Adapter::admin_url( array( 'action' => 'edit', 'table_id' => $table_id ) ) ) . '">' . esc_html__( 'Open in TablePress', 'tablerefresh' ) . '</a>';
+			$editor_url = TablePress_Adapter::admin_url(
+				array(
+					'action'   => 'edit',
+					'table_id' => $table_id,
+				)
+			);
+			echo ' <a href="' . esc_url( $editor_url ) . '">' . esc_html__( 'Open in TablePress', 'tablerefresh' ) . '</a>';
 		}
 		echo '</td></tr>';
 
@@ -512,13 +534,13 @@ final class Admin {
 	 * @param string $action  Action: "keep" or "remove".
 	 * @param int    $post_id Table post ID.
 	 * @param string $label   Button label.
-	 * @param string $class   Button classes.
+	 * @param string $classes Button classes.
 	 */
-	private static function action_form( string $action, int $post_id, string $label, string $class ): void {
+	private static function action_form( string $action, int $post_id, string $label, string $classes ): void {
 		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" class="tablerefresh-inline-form">';
 		echo '<input type="hidden" name="action" value="tablerefresh_' . esc_attr( $action ) . '"><input type="hidden" name="table" value="' . esc_attr( (string) $post_id ) . '">';
 		wp_nonce_field( 'tablerefresh_' . $action . '_' . $post_id );
-		echo '<button type="submit" class="' . esc_attr( $class ) . '">' . esc_html( $label ) . '</button></form>';
+		echo '<button type="submit" class="' . esc_attr( $classes ) . '">' . esc_html( $label ) . '</button></form>';
 	}
 
 	/**
@@ -565,7 +587,7 @@ final class Admin {
 			'frequency' => isset( $_POST['frequency'] ) ? sanitize_key( wp_unslash( $_POST['frequency'] ) ) : '',
 			'enabled'   => ! empty( $_POST['enabled'] ),
 		);
-		$back     = self::url( $is_new ? array( 'action' => 'add' ) : array( 'action' => 'edit', 'table' => $post_id ) );
+		$back     = $is_new ? self::url( array( 'action' => 'add' ) ) : self::edit_url( $post_id );
 
 		self::require_tablepress();
 		if ( $is_new && ( '' === $table_id || ! TablePress_Adapter::table_exists( $table_id ) ) ) {
@@ -624,8 +646,8 @@ final class Admin {
 		list( $post_id, $table_id ) = self::verify_table_request( 'sync' );
 		$result                     = ( new Sync_Runner() )->run( $post_id, 'manual' );
 		self::set_notice( $result['outcome'], self::result_message( $result, $table_id ) );
-		$back = isset( $_POST['back'] ) && 'edit' === $_POST['back'] ? array( 'action' => 'edit', 'table' => $post_id ) : array(); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Verified in verify_table_request().
-		self::redirect( self::url( $back ) );
+		$back = isset( $_POST['back'] ) && 'edit' === $_POST['back'] ? self::edit_url( $post_id ) : self::url(); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Verified in verify_table_request().
+		self::redirect( $back );
 	}
 
 	/**
@@ -633,7 +655,7 @@ final class Admin {
 	 */
 	public static function handle_replace(): void {
 		list( $post_id, $table_id ) = self::verify_table_request( 'replace' );
-		$back                       = self::url( array( 'action' => 'edit', 'table' => $post_id ) );
+		$back                       = self::edit_url( $post_id );
 		if ( empty( $_POST['confirm_replace'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Verified in verify_table_request().
 			self::set_notice( 'failed', __( 'Nothing was changed. Confirm that the changes made in TablePress may be replaced.', 'tablerefresh' ) );
 			self::redirect( $back );
@@ -656,7 +678,7 @@ final class Admin {
 			Scheduler::apply( $post_id, Sync_Config::get( $post_id ) );
 		}
 		self::set_notice( 'saved', __( 'The changes made in TablePress are kept, and automatic sync is turned off. "Sync now" will again stop at these changes until you choose to replace them.', 'tablerefresh' ) );
-		self::redirect( self::url( array( 'action' => 'edit', 'table' => $post_id ) ) );
+		self::redirect( self::edit_url( $post_id ) );
 	}
 
 	/**

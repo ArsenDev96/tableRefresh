@@ -56,6 +56,8 @@ final class Sync_Log {
 	 *
 	 * @param int                  $post_id Table post ID.
 	 * @param array<string, mixed> $entry {
+	 *     The attempt.
+	 *
 	 *     @type int    $time    Unix time.
 	 *     @type string $trigger "manual", "scheduled", "setup", or "replace".
 	 *     @type string $outcome "updated", "unchanged", "conflict", or "failed".

@@ -498,7 +498,7 @@ final class Table_Updater {
 			TablePress_Adapter::clear_caches( $context['table_id'], $context['post_id'] );
 			return false;
 		}
-		$own     = self::is_partial_write( $current, array( 'target' => array( 'state' => $context['target']['state'] ) ), false )
+		$own = self::is_partial_write( $current, array( 'target' => array( 'state' => $context['target']['state'] ) ), false )
 			// After a database error, statements of this update may have been committed outside the
 			// transaction (also before its baseline): restore if only this update's values are stored.
 			|| ( $context['interrupted'] && self::holds_only_update_values( $current, $context ) );
