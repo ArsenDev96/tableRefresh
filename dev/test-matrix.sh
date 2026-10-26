@@ -5,7 +5,7 @@
 #   sh dev/test-matrix.sh db                     # all database servers below
 #   sh dev/test-matrix.sh tablepress 3.0 3.4.1   # TablePress versions from wordpress.org
 #
-# Results are appended to dev/matrix-results.txt.
+# Results are appended to dev/matrix-results.txt; full suite output is kept in /tmp/<project>-suite.log.
 set -u
 cd "$(dirname "$0")"
 export MSYS_NO_PATHCONV=1
@@ -20,7 +20,7 @@ run_project() { # project, label
 	else
 		server=$(docker compose run --rm -T cli wp eval 'global $wpdb; echo $wpdb->db_server_info();' 2>/dev/null | tail -1)
 		tp=$(docker compose run --rm -T cli wp plugin get tablepress --field=version 2>/dev/null | tail -1)
-		main=$(sh run-tests.sh 2>&1 | grep -E "^(OK|Tests:)" | tail -1)
+		main=$(sh run-tests.sh 2>&1 | tee "/tmp/$1-suite.log" | grep -E "^(OK|Tests:)" | tail -1)
 		engine=$(sh run-tests.sh --group engine 2>&1 | grep -E "^(OK|Tests:)" | tail -1)
 		echo "$2 [server: $server, TablePress $tp]: suite: $main | engine group: $engine" | tee -a "$RESULTS"
 	fi
@@ -29,7 +29,7 @@ run_project() { # project, label
 }
 
 (unset COMPOSE_PROJECT_NAME; docker compose stop >/dev/null 2>&1)
-echo "== $(date -u '+%Y-%m-%d %H:%M UTC') $*" >>"$RESULTS"
+echo "== $(date -u '+%Y-%m-%d %H:%M UTC') commit $(git rev-parse --short HEAD): $*" >>"$RESULTS"
 
 case "${1:-}" in
 	db)

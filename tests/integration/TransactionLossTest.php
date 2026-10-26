@@ -59,6 +59,44 @@ class TransactionLossTest extends Integration_Test_Case {
 		$this->assertUnchanged( $table_id, $before, $revisions );
 	}
 
+	public function test_journal_of_a_killed_retry_describes_that_retry_and_recovers() {
+		global $wpdb;
+		$table_id  = $this->create_table( self::ORIGINAL );
+		$before    = $this->raw_state( $table_id );
+		$revisions = $this->revision_count( $table_id );
+
+		// Attempt 1 deadlocks and is undone; attempt 2 is killed in the middle of its write.
+		$run = $this->run_cli(
+			array( 'sync', $table_id, $this->fixture( 'new.csv', self::NEW_CSV ) ),
+			array(
+				'TABLEREFRESH_TEST_FAULT'    => 'deadlock_before_post_update_then_kill',
+				'TABLEREFRESH_TEST_LOCK_TTL' => '5',
+			)
+		);
+		$this->assertStringContainsString( 'TEST FAULT: deadlock: Deadlock found', $run['stderr'] );
+		$this->assertStringContainsString( 'TEST FAULT: SIGKILL', $run['stderr'], 'The retry was killed.' );
+		$this->assertNull( $run['json'] );
+
+		// InnoDB discarded the retry's transaction. Exactly one journal remains: the retry's,
+		// owned by the killed process's lock, with the original table as its snapshot.
+		$this->assertSame( $before, $this->raw_state( $table_id ) );
+		$journal = Journal::read( $table_id );
+		$this->assertNotNull( $journal );
+		$journals = $wpdb->get_col( $wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like( Journal::PREFIX ) . '%' ) );
+		$this->assertCount( 1, array_filter( $journals, static fn( $value ) => ( json_decode( $value, true )['table_id'] ?? null ) === $table_id ) );
+		$lock = $wpdb->get_var( $wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", Table_Lock::option_name( $table_id ) ) );
+		$this->assertSame( $lock, $journal['owner'], 'The journal belongs to the lock of the killed retry.' );
+		$this->assertSame( $before['post_content'], $journal['snapshot']['post_content'] );
+		$this->assertSame( md5( wp_json_encode( array( array( 'n1', 'n2', 'n3' ), array( 'v1', 'v2', 'v3' ), array( 'w1', 'w2', 'w3' ) ) ) ), $journal['target']['data_md5'] );
+
+		sleep( 6 ); // Lock lifetime of the killed process is 5 s.
+		$recovered = $this->run_cli( array( 'recover', $table_id ) );
+		$this->assertSame( 'rolled_back', $recovered['json']['status'] ?? null, $recovered['stdout'] . $recovered['stderr'] );
+		$this->assertUnchanged( $table_id, $before, $revisions );
+
+		$this->assertSame( 'updated', $this->sync( $table_id, $this->fixture( 'new.csv', self::NEW_CSV ) )['status'] );
+	}
+
 	public function test_lost_connection_during_the_write_is_undone() {
 		$table_id  = $this->create_table( self::ORIGINAL );
 		$before    = $this->raw_state( $table_id );
@@ -70,6 +108,33 @@ class TransactionLossTest extends Integration_Test_Case {
 		$this->assertStringContainsString( 'TEST FAULT: connection', $run['stderr'] );
 		$this->assertSame( 'tablerefresh_write_interrupted', $run['json']['code'] ?? null, $run['stdout'] . $run['stderr'] );
 		$this->assertTrue( $run['json']['data']['tablerefresh_reverted']['reverted'] );
+		$this->assertUnchanged( $table_id, $before, $revisions );
+	}
+
+	public function test_write_committed_outside_the_transaction_by_a_killed_process_is_recovered() {
+		$table_id  = $this->create_table( self::ORIGINAL );
+		$before    = $this->raw_state( $table_id );
+		$revisions = $this->revision_count( $table_id );
+
+		$run = $this->run_cli(
+			array( 'sync', $table_id, $this->fixture( 'new.csv', self::NEW_CSV ) ),
+			array(
+				'TABLEREFRESH_TEST_FAULT'    => 'connection_lost_before_post_update_then_kill',
+				'TABLEREFRESH_TEST_LOCK_TTL' => '5',
+			)
+		);
+		$this->assertStringContainsString( 'TEST FAULT: SIGKILL', $run['stderr'] );
+
+		// The repeated post UPDATE was committed on its own, before this update's baseline (which
+		// the server rolled back with the transaction): new data, old visibility.
+		$partial = $this->raw_state( $table_id );
+		$this->assertNotSame( $before['post_content'], $partial['post_content'] );
+		$this->assertSame( $before['_tablerefresh_sync_state'] ?? null, $partial['_tablerefresh_sync_state'] ?? null );
+		$this->assertNotNull( Journal::read( $table_id ) );
+
+		sleep( 6 ); // Lock lifetime of the killed process is 5 s.
+		$recovered = $this->run_cli( array( 'recover', $table_id ) );
+		$this->assertSame( 'restored', $recovered['json']['status'] ?? null, $recovered['stdout'] . $recovered['stderr'] );
 		$this->assertUnchanged( $table_id, $before, $revisions );
 	}
 

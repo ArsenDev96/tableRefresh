@@ -374,8 +374,10 @@ final class Table_Updater {
 	 * @param string $table_id Table ID.
 	 * A snapshot is only restored over a partial write of that same update: the table must still
 	 * carry the update's unique baseline (written first, inside the write) and its data must be
-	 * the before- or after-state of that update. Any other state means the table was changed
-	 * after the interrupted update, so the journal is outdated and the table is left alone.
+	 * the before- or after-state of that update; or every part of the table (data, visibility,
+	 * baseline, options, name, description) must be its value before or after that update. Any
+	 * other state means the table was changed after the interrupted update, so the journal is
+	 * outdated and the table is left alone.
 	 *
 	 * @return array{status: string}|WP_Error Status "none", "rolled_back" (the table is unchanged),
 	 *                                        "completed" (the write had finished), "restored"
@@ -399,7 +401,10 @@ final class Table_Updater {
 			$status = 'rolled_back';
 		} elseif ( self::matches_target( $current, $journal ) ) {
 			$status = 'completed';
-		} elseif ( self::is_partial_write( $current, $journal, true ) ) {
+		} elseif ( self::is_partial_write( $current, $journal, true )
+			// A statement that wpdb repeated after a lost connection was committed outside the
+			// transaction, which the server rolled back together with the baseline.
+			|| ( isset( $journal['target']['state'] ) && self::holds_only_update_values( $current, $journal ) ) ) {
 			if ( ! TablePress_Adapter::restore_snapshot( $table_id, $post_id, $journal['snapshot'] ) ) {
 				return new WP_Error( 'tablerefresh_recovery_failed', __( 'An interrupted update could not be undone. The backup was kept.', 'tablerefresh' ) );
 			}
@@ -528,7 +533,7 @@ final class Table_Updater {
 	 * Whether every part of the stored table is either its value before or after this update.
 	 *
 	 * @param array<string, string|null>|null $current Current snapshot.
-	 * @param array<string, mixed>            $context Update context.
+	 * @param array<string, mixed>            $context Update context or journal entry (snapshot, target).
 	 * @return bool
 	 */
 	private static function holds_only_update_values( ?array $current, array $context ): bool {

@@ -125,3 +125,7 @@ mutate class-table-updater.php \
 	"'tablerefresh_write_interrupted' !== \$result->get_error_code()" \
 	"true" \
 	"test_deadlock_during_the_write_is_rolled_back_and_retried" "no retry after a deadlock"
+mutate class-table-updater.php \
+	"			|| ( isset( \$journal['target']['state'] ) && self::holds_only_update_values( \$current, \$journal ) ) ) {" \
+	"			) {" \
+	"test_write_committed_outside_the_transaction" "recovery ignores writes committed outside the transaction"

@@ -19,8 +19,12 @@
  *   TableRefresh's transaction holds the row lock (after TablePress wrote the post).
  * - TABLEREFRESH_TEST_FAULT=deadlock_before_post_update[_once] A real InnoDB deadlock with another
  *   connection, right before WordPress writes the table post (on every write, or only the first).
+ * - TABLEREFRESH_TEST_FAULT=deadlock_before_post_update_then_kill The first attempt deadlocks; the
+ *   retry is killed (SIGKILL) after WordPress wrote the table post.
  * - TABLEREFRESH_TEST_FAULT=connection_lost_before_post_update Another connection kills this one at
  *   the same point; wpdb reconnects and repeats the next statement outside the transaction.
+ * - TABLEREFRESH_TEST_FAULT=connection_lost_before_post_update_then_kill The same, then SIGKILL once
+ *   that repeated post UPDATE was committed.
  * - TABLEREFRESH_TEST_EDITOR_TTL=<seconds>          Lifetime of editor sessions (0: ignore them).
  * - TABLEREFRESH_TEST_NO_TRANSACTIONS=1             Simulate a database without transactions and opt in
  *                                                    to non-atomic updates (refused by default).
@@ -109,8 +113,8 @@ if ( 'kill_after_revision' === $tablerefresh_test_fault ) {
 		20
 	);
 }
-if ( 0 === strpos( $tablerefresh_test_fault, 'deadlock_before_post_update' ) || 'connection_lost_before_post_update' === $tablerefresh_test_fault ) {
-	if ( 'connection_lost_before_post_update' !== $tablerefresh_test_fault ) {
+if ( 0 === strpos( $tablerefresh_test_fault, 'deadlock_before_post_update' ) || 0 === strpos( $tablerefresh_test_fault, 'connection_lost_before_post_update' ) ) {
+	if ( 0 !== strpos( $tablerefresh_test_fault, 'connection_lost_before_post_update' ) ) {
 		tablerefresh_test_prepare_deadlock(); // Before any transaction: DDL would end it.
 		// What another connection (a visitor) sees once WordPress wrote the post, during the write.
 		add_action(
@@ -131,11 +135,11 @@ if ( 0 === strpos( $tablerefresh_test_fault, 'deadlock_before_post_update' ) || 
 		'pre_post_update',
 		static function ( $post_id ) use ( $tablerefresh_test_fault ) {
 			static $fired = false;
-			if ( ! tablerefresh_test_is_writing() || ( $fired && 'deadlock_before_post_update_once' === $tablerefresh_test_fault ) ) {
+			if ( ! tablerefresh_test_is_writing() || ( $fired && in_array( $tablerefresh_test_fault, array( 'deadlock_before_post_update_once', 'deadlock_before_post_update_then_kill' ), true ) ) ) {
 				return;
 			}
 			$fired = true;
-			if ( 'connection_lost_before_post_update' === $tablerefresh_test_fault ) {
+			if ( 0 === strpos( $tablerefresh_test_fault, 'connection_lost_before_post_update' ) ) {
 				tablerefresh_test_kill_connection();
 			} else {
 				tablerefresh_test_deadlock( (int) $post_id );
@@ -163,6 +167,8 @@ if ( '' !== $tablerefresh_test_fault ) {
 			}
 			switch ( $tablerefresh_test_fault ) {
 				case 'kill_after_post_update':
+				case 'deadlock_before_post_update_then_kill': // Only the retry reaches this point.
+				case 'connection_lost_before_post_update_then_kill':
 					fwrite( STDERR, "TEST FAULT: SIGKILL\n" );
 					posix_kill( getmypid(), 9 );
 					sleep( 5 ); // Never reached.
