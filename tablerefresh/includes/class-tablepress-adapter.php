@@ -306,14 +306,21 @@ final class TablePress_Adapter {
 	 */
 	public static function read_snapshot( int $post_id, bool $for_update = false ): ?array {
 		global $wpdb;
-		$lock = $for_update ? ' FOR UPDATE' : '';
 
-		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- Must bypass caches to see what is really stored; $lock is a constant string; placeholders are filled via spread.
-		$post = $wpdb->get_row( $wpdb->prepare( "SELECT post_type, post_title, post_excerpt, post_content, post_modified, post_modified_gmt FROM {$wpdb->posts} WHERE ID = %d", $post_id ) . $lock, ARRAY_A );
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Must bypass caches to see what is really stored.
+		if ( $for_update ) {
+			$post = $wpdb->get_row( $wpdb->prepare( "SELECT post_type, post_title, post_excerpt, post_content, post_modified, post_modified_gmt FROM {$wpdb->posts} WHERE ID = %d FOR UPDATE", $post_id ), ARRAY_A );
+		} else {
+			$post = $wpdb->get_row( $wpdb->prepare( "SELECT post_type, post_title, post_excerpt, post_content, post_modified, post_modified_gmt FROM {$wpdb->posts} WHERE ID = %d", $post_id ), ARRAY_A );
+		}
 		if ( null === $post ) {
 			return null;
 		}
-		$meta = $wpdb->get_results( $wpdb->prepare( "SELECT meta_key, meta_value FROM {$wpdb->postmeta} WHERE post_id = %d AND meta_key IN (%s, %s, %s) ORDER BY meta_id", $post_id, ...self::SNAPSHOT_META_KEYS ) . $lock, ARRAY_A );
+		if ( $for_update ) {
+			$meta = $wpdb->get_results( $wpdb->prepare( "SELECT meta_key, meta_value FROM {$wpdb->postmeta} WHERE post_id = %d AND meta_key IN (%s, %s, %s) ORDER BY meta_id FOR UPDATE", $post_id, self::OPTIONS_META_KEY, self::VISIBILITY_META_KEY, Sync_State::META_KEY ), ARRAY_A );
+		} else {
+			$meta = $wpdb->get_results( $wpdb->prepare( "SELECT meta_key, meta_value FROM {$wpdb->postmeta} WHERE post_id = %d AND meta_key IN (%s, %s, %s) ORDER BY meta_id", $post_id, self::OPTIONS_META_KEY, self::VISIBILITY_META_KEY, Sync_State::META_KEY ), ARRAY_A );
+		}
 		// phpcs:enable
 		if ( '' !== (string) $wpdb->last_error || ! is_array( $meta ) ) {
 			return null; // A failed query returns no rows, which would look like a table without options.
