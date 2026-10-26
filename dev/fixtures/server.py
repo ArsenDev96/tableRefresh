@@ -90,6 +90,19 @@ class Handler(BaseHTTPRequestHandler):
             body = gzip.compress(b"a,b\n" + b"1,2\n" * (size // 4), compresslevel=9)
             return self._send(200, body, headers={"Content-Encoding": "gzip"})
 
+        if path.startswith("/google/export/"):
+            # Like docs.google.com/.../export?format=csv: a 307 with Google's odd content type.
+            name = path[len("/google/export/"):]
+            return self._send(307, b"", "application/binary", headers={"Location": "/google/ugc/" + name})
+
+        if path.startswith("/google/ugc/"):
+            # Like *.googleusercontent.com: the CSV as an attachment (tests write CRLF, no final EOL).
+            body = self._file("data", path[len("/google/ugc/"):])
+            if body is None:
+                return self._send(404, b"Not found", "text/html; charset=utf-8")
+            headers = {"Content-Disposition": 'attachment; filename="Sheet1.csv"'}
+            return self._send(200, body, "text/csv; charset=utf-8", headers=headers)
+
         if path == "/gzip-huge":
             # About 1 GB of CSV when decompressed, about 1 MB on the wire.
             body = _huge_gzip()
