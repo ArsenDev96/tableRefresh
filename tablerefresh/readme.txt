@@ -1,5 +1,5 @@
 === TableRefresh – Auto Sync for TablePress ===
-Contributors: tablerefresh
+Contributors: arsenmanukyan
 Tags: tablepress, csv, google sheets, sync, import
 Requires at least: 6.7
 Tested up to: 7.1
