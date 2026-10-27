@@ -1,13 +1,15 @@
-# Handoff – 2026-10-27 (office → home computer)
+# Handoff – 2026-10-27 (home computer, after RC2)
 
 ## Where things stand
 
-- Branch `main`, based on `0eb2308`. Plugin version 1.0.0 (header, readme Stable tag, constant).
+- Branch `main`; RC2 = `06ddaa2`, results committed after it. Plugin version 1.0.0 (header, readme Stable tag, constant).
 - Tag `v1.0.0-rc1` = `472d940` (RC1). Its ZIP: `sh dev/build-zip.sh v1.0.0-rc1 rc1`, 25 files,
   SHA-256 `4079166f6d4d822ed12dcb5f97ea4c4007bee25cbb80028ee78dcabeeda33072` with Git for Windows 2.45
   (another Git/zlib version may compress differently: then compare the files, not the hash).
-- Plugin code changed after RC1 (`0626e32`, admin wording and remove confirmation), so the next ZIP is RC2.
-- GitHub repository is public; no Actions workflows, releases, or tags there (checked 2026-10-27).
+- Plugin code changed after RC1 (`0626e32`, admin wording and remove confirmation), so RC2 was built (see below).
+- GitHub repository is public; no Actions workflows or releases. GitHub has a lightweight `v1.0.0-rc1`
+  tag on `472d940`; this machine has an annotated tag of the same name and commit (fetch reports
+  "would clobber existing tag"; harmless). Checked 2026-10-27.
 
 ## Completed
 
@@ -27,15 +29,22 @@
   on the server). Tests and mutation "admin: remove without confirmation" added.
 - New WordPress.org screenshots (`release/wordpress-org-assets/`, made with `store-shots.js`).
 
-## Remaining for RC2
+## RC2 (2026-10-27, home computer)
 
-1. `tablerefresh/readme.txt` line 2: `Contributors:` needs the owner's WordPress.org username.
-2. PHP 8.3 timing tests in `ConcurrencyTest` fail occasionally on slow machines (wall-clock limits);
-   make them robust (tests only).
-3. Build RC2 (`sh dev/build-zip.sh HEAD rc2`), then focused checks on it: PHP 8.3 + 7.4 suites, admin
-   mutations, browser workflow on `sh dev/rc-env.sh up`, Plugin Check.
-4. Optional: deferred matrices (TablePress 3.1–3.4, MySQL 8.x); screen-reader pass.
-5. WordPress.org submission only with the owner's explicit approval.
+- RC2 = `06ddaa2` (not tagged). ZIP: `sh dev/build-zip.sh 06ddaa2 rc2`, 25 files,
+  SHA-256 `5d9f23ffcbc1e1cbe5b3de50df1f18294759f398932788d3b08ba23e862a2e28` (Git for Windows 2.46.2;
+  RC1 rebuilds to its recorded hash with 2.46.2 too).
+- `ConcurrencyTest` timing tests now observe lock state instead of wall-clock limits (tests only).
+- Focused checks passed: `dev/release-checks/rc2-results/focused-verification.txt` (PHP 8.3 + 7.4
+  suites, admin mutations 5/5, PHPCS, Plugin Check, browser workflow 36/36).
+
+## Remaining
+
+1. `tablerefresh/readme.txt` line 2: `Contributors: tablerefresh` is still a placeholder (owner's
+   decision for RC2). Set the owner's WordPress.org username(s) before submission; that changes the
+   ZIP, so rebuild and re-run Plugin Check.
+2. Optional: deferred matrices (TablePress 3.1–3.4, MySQL 8.x); screen-reader pass.
+3. WordPress.org submission only with the owner's explicit approval.
 
 ## Tools
 

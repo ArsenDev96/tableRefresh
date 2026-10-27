@@ -1,0 +1,48 @@
+== 2026-10-27, focused verification of v1.0.0 RC2 (06ddaa2), home machine (Windows 11, Docker 20.10.22)
+Strategy (owner's decision): focused regression checks; no compatibility matrices.
+Existing dev stack reused (volumes from earlier work on this machine; Redis object cache enabled).
+WordPress 7.1.3, TablePress 3.4.1, MariaDB 10.11.19, WP-CLI PHP 8.3.36 / 7.4.33, Git for Windows 2.46.2.
+
+-- changes since RC1 (472d940)
+Plugin: 0626e32 (admin headings, "Remove sync setup" with confirmation; POT regenerated).
+Tests: 06ddaa2 ConcurrencyTest observes lock state instead of wall-clock limits:
+   test_different_tables_sync_in_parallel asserts that both table locks were held at the same time
+   (was: < 7 s measured from before both WordPress boots);
+   test_process_that_outlived_its_lock_does_not_write waits until A's lock row exists and has
+   expired (was: fixed 3.5 s sleep).
+   Both still fail when broken (temporary mutations, file restored afterwards):
+   global GET_LOCK in Table_Lock::acquire() -> "Different tables must not block each other.";
+   is_held() always true -> A's sync is not refused with tablerefresh_lock_lost.
+   Both tests x10 (--repeat 10, PHP 8.3): OK (20 tests, 170 assertions).
+readme.txt "Contributors: tablerefresh" kept (owner's decision: WordPress.org username(s) to be
+   set before submission; that changes readme.txt and needs a new build).
+
+-- RC identity
+dist/tablerefresh-1.0.0-rc2.zip = sh dev/build-zip.sh 06ddaa2 rc2, 25 files,
+SHA-256 5d9f23ffcbc1e1cbe5b3de50df1f18294759f398932788d3b08ba23e862a2e28 (two builds identical;
+no CR bytes; no debug code; languages/tablerefresh.pot matches a fresh wp i18n make-pot).
+RC1 rebuilt from the tag with Git 2.46.2: 4079166f... as recorded (reproducible across Git 2.45/2.46).
+
+-- suites
+PHP 8.3 + Redis, full suite:  OK (238 tests, 2112 assertions)
+PHP 7.4 + Redis, full suite:  OK (238 tests, 2112 assertions)
+PHP 8.3, no Redis, full suite: Tests: 238, Assertions: 2081, Skipped: 4 (Redis-only skips), no failures
+PHPCS (WPCS 3.1 + PHPCompatibilityWP, tablerefresh/.phpcs.xml.dist): no findings.
+
+-- admin mutations (dev/mutation-check.sh, mutations of class-admin.php; PHP 8.3 + Redis): 5 of 5 caught
+caught    admin: no permission check -> Tests: 1, Assertions: 14, Failures: 1.
+caught    admin: no nonce check -> Tests: 1, Assertions: 9, Failures: 1.
+caught    admin: replace without confirmation -> Tests: 1, Assertions: 16, Failures: 1.
+caught    admin: remove without confirmation -> Tests: 1, Assertions: 21, Failures: 1.
+caught    admin: setup without confirmation -> Tests: 1, Assertions: 7, Failures: 1.
+
+-- clean site from the ZIP (dev/rc-env.sh up; http://localhost:8090)
+Plugin Check 2.1.0, --include-experimental, RC2 installed with WP-CLI: "Checks complete. No errors found."
+Browser workflow (workflow.js) on a fresh site, plugin installed through Plugins > Add New > Upload:
+   36/36 PASS (same checks as rc1-results/browser-workflow.txt), including first and changed-data
+   sync from the public Google sample sheet, conflict keep/replace, SSRF refusal, no JavaScript
+   errors, empty debug.log.
+
+-- not done in this round
+Other mutations (plugin code outside class-admin.php unchanged since RC1), repetitions beyond
+ConcurrencyTest, MyISAM and live-Google groups, db/wp/php/TablePress matrices, screen-reader pass.
