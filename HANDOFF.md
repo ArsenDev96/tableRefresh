@@ -48,7 +48,7 @@
   adjacent on collisions; without a TablePress top-level entry it goes after the content menus. The
   former `tools.php?page=tablerefresh` redirects to `admin.php?page=tablerefresh`. No sync engine change.
 - Checked on a test ZIP (`sh dev/build-zip.sh 9d79fae menu`): PHP 8.3 full suite OK (242 tests),
-  AdminScreenTest on PHP 7.4 OK, PHPCS clean, 7 menu mutations caught (2 added to mutation-check.sh),
+  AdminScreenTest on PHP 7.4 OK, PHPCS clean, 5 menu mutations caught (2 of them added to mutation-check.sh),
   browser workflow 38/38 (2 new menu checks), Plugin Check no errors. New WordPress.org screenshots.
 - The plugin changed after RC2, so the next release build is RC3.
 
