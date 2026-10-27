@@ -282,8 +282,10 @@ final class Admin {
 		);
 		$name     = isset( $names[ $table_id ] ) ? $names[ $table_id ] : '';
 
-		/* translators: %s: table name. */
-		echo '<h1>' . esc_html( $post_id > 0 ? sprintf( __( 'Automatic sync: %s', 'tablerefresh' ), '' !== $name ? $name : $table_id ) : __( 'Set up automatic sync', 'tablerefresh' ) ) . '</h1>';
+		/* translators: 1: table name, 2: table ID. */
+		$table_label = sprintf( __( '%1$s (ID %2$s)', 'tablerefresh' ), '' !== $name ? $name : __( '(no name)', 'tablerefresh' ), $table_id );
+		/* translators: %s: table name and ID, e.g. "Prices (ID 3)". */
+		echo '<h1>' . esc_html( $post_id > 0 ? sprintf( __( 'Settings and history: %s', 'tablerefresh' ), $table_label ) : __( 'Set up table sync', 'tablerefresh' ) ) . '</h1>';
 		echo '<p><a href="' . esc_url( self::url() ) . '">&larr; ' . esc_html__( 'All tables', 'tablerefresh' ) . '</a></p>';
 		self::print_notice();
 		if ( ! empty( $form['error'] ) ) {
@@ -325,8 +327,7 @@ final class Admin {
 			}
 			echo '</select>';
 		} else {
-			/* translators: 1: table name, 2: table ID. */
-			echo '<strong>' . esc_html( sprintf( __( '%1$s (ID %2$s)', 'tablerefresh' ), '' !== $name ? $name : __( '(no name)', 'tablerefresh' ), $table_id ) ) . '</strong>';
+			echo '<strong>' . esc_html( $table_label ) . '</strong>';
 			$editor_url = TablePress_Adapter::admin_url(
 				array(
 					'action'   => 'edit',
@@ -376,8 +377,12 @@ final class Admin {
 		self::render_history( $post_id );
 
 		echo '<h2>' . esc_html__( 'Stop syncing this table', 'tablerefresh' ) . '</h2>';
-		echo '<p>' . esc_html__( 'Removes the sync settings and history. The table and its current data stay as they are.', 'tablerefresh' ) . '</p>';
-		self::action_form( 'remove', $post_id, __( 'Remove automatic sync', 'tablerefresh' ), 'button tablerefresh-button-delete' );
+		echo '<p>' . esc_html__( 'Deletes the sync settings and the sync history of this table and stops automatic sync. The TablePress table and its data are not changed.', 'tablerefresh' ) . '</p>';
+		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
+		echo '<input type="hidden" name="action" value="tablerefresh_remove"><input type="hidden" name="table" value="' . esc_attr( (string) $post_id ) . '">';
+		wp_nonce_field( 'tablerefresh_remove_' . $post_id );
+		echo '<p><label><input type="checkbox" name="confirm_remove" value="1" required> ' . esc_html__( 'I understand that the sync settings and history will be deleted.', 'tablerefresh' ) . '</label></p>';
+		echo '<p><button type="submit" class="button tablerefresh-button-delete">' . esc_html__( 'Remove sync setup', 'tablerefresh' ) . '</button></p></form>';
 	}
 
 	/**
@@ -686,9 +691,13 @@ final class Admin {
 	 */
 	public static function handle_remove(): void {
 		list( $post_id ) = self::verify_table_request( 'remove' );
+		if ( empty( $_POST['confirm_remove'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Verified in verify_table_request().
+			self::set_notice( 'failed', __( 'Nothing was removed. Confirm that the sync settings and history may be deleted.', 'tablerefresh' ) );
+			self::redirect( self::edit_url( $post_id ) );
+		}
 		Sync_Config::delete( $post_id );
 		Scheduler::apply( $post_id, null );
-		self::set_notice( 'saved', __( 'Automatic sync was removed. The table was not changed.', 'tablerefresh' ) );
+		self::set_notice( 'saved', __( 'The sync setup was removed. The TablePress table and its data were not changed.', 'tablerefresh' ) );
 		self::redirect( self::url() );
 	}
 

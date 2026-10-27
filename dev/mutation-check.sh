@@ -166,6 +166,10 @@ mutate class-admin.php \
 	"		if ( false ) {" \
 	"test_conflict_is_shown_and_resolved" "admin: replace without confirmation"
 mutate class-admin.php \
+	"		if ( empty( \$_POST['confirm_remove'] ) ) {" \
+	"		if ( false ) {" \
+	"test_edit_changes_the_schedule_and_remove_keeps_the_table" "admin: remove without confirmation"
+mutate class-admin.php \
 	"		if ( ( \$is_new || null === Sync_State::read( \$post_id ) ) && empty( \$_POST['confirm_replace'] ) ) {" \
 	"		if ( false ) {" \
 	"test_setup_requires_confirmation" "admin: setup without confirmation"

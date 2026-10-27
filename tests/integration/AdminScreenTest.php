@@ -200,7 +200,9 @@ class AdminScreenTest extends Integration_Test_Case {
 		);
 
 		$this->submit( $cookie, $fields + $values ); // Without confirm_replace.
-		$this->assertStringContainsString( 'Confirm that the current content of the table may be replaced', $this->page( $cookie, '&action=add' ) );
+		$html = $this->page( $cookie, '&action=add' );
+		$this->assertStringContainsString( 'Confirm that the current content of the table may be replaced', $html );
+		$this->assertStringContainsString( '<h1>Set up table sync</h1>', $html );
 		$this->submit( $cookie, $fields + array_merge( $values, array( 'url' => 'ftp://example.com/x.csv', 'confirm_replace' => '1' ) ) );
 		$html = $this->page( $cookie, '&action=add' );
 		$this->assertStringContainsString( 'Enter a complete web address', $html );
@@ -269,6 +271,7 @@ class AdminScreenTest extends Integration_Test_Case {
 						'action'          => 'tablerefresh_' . $action,
 						'table'           => (string) $post_id,
 						'confirm_replace' => '1',
+						'confirm_remove'  => '1',
 						'_wpnonce'        => $this->nonce_for( $user_id, $user_cookie, 'tablerefresh_' . $action . '_' . $post_id ),
 					)
 				);
@@ -298,7 +301,7 @@ class AdminScreenTest extends Integration_Test_Case {
 		$this->assertStringNotContainsString( 'name="action" value="tablerefresh_sync"><input type="hidden" name="table" value="' . $post_id . '"', $list, 'No "Sync now" while a decision is pending.' );
 		$edit = $this->page( $cookie, '&action=edit&table=' . $post_id );
 		$this->assertStringContainsString( 'This table was changed in TablePress', $edit );
-		$this->assertStringContainsString( 'Automatic sync: Prices', $edit );
+		$this->assertStringContainsString( '<h1>Settings and history: Prices (ID ' . $table_id . ')</h1>', $edit );
 
 		// Replace without the confirmation checkbox: refused.
 		$replace = $this->form_fields( $edit, 'tablerefresh_replace', $post_id );
@@ -350,12 +353,22 @@ class AdminScreenTest extends Integration_Test_Case {
 		$this->assertSame( 0, Scheduler::count_events( $post_id ) );
 
 		$data = $this->load_table( $table_id )['data'];
-		$this->submit( $cookie, $this->form_fields( $this->page( $cookie, '&action=edit&table=' . $post_id ), 'tablerefresh_remove', $post_id ) );
+		$edit = $this->page( $cookie, '&action=edit&table=' . $post_id );
+		$this->assertStringContainsString( 'name="confirm_remove" value="1" required', $edit );
+		$this->assertStringContainsString( '>Remove sync setup</button>', $edit );
+
+		// Without the confirmation checkbox: refused, nothing deleted.
+		$this->submit( $cookie, $this->form_fields( $edit, 'tablerefresh_remove', $post_id ) );
+		$this->assertNotNull( Sync_Config::get( $post_id ) );
+		$this->assertNotSame( array(), Sync_Log::get( $post_id )['entries'] );
+		$this->assertStringContainsString( 'Nothing was removed.', $this->page( $cookie, '&action=edit&table=' . $post_id ) );
+
+		$this->submit( $cookie, $this->form_fields( $edit, 'tablerefresh_remove', $post_id ) + array( 'confirm_remove' => '1' ) );
 		$this->assertNull( Sync_Config::get( $post_id ) );
 		$this->assertSame( array(), Sync_Log::get( $post_id )['entries'] );
 		$this->assertSame( 0, Scheduler::count_events( $post_id ) );
 		$this->assertSame( $data, $this->load_table( $table_id )['data'], 'The table is not changed.' );
-		$this->assertStringContainsString( 'Automatic sync was removed. The table was not changed.', $this->page( $cookie ) );
+		$this->assertStringContainsString( 'The sync setup was removed. The TablePress table and its data were not changed.', $this->page( $cookie ) );
 	}
 
 	public function test_table_names_and_messages_are_escaped() {
