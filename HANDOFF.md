@@ -37,14 +37,14 @@
 - `ConcurrencyTest` timing tests now observe lock state instead of wall-clock limits (tests only).
 - Focused checks passed: `dev/release-checks/rc2-results/focused-verification.txt` (PHP 8.3 + 7.4
   suites, admin mutations 5/5, PHPCS, Plugin Check, browser workflow 36/36).
+- Contributors set to `arsenmanukyan` in `faaac1f`. Final ZIP: `sh dev/build-zip.sh faaac1f rc2-final`,
+  SHA-256 `defbb9fadef2bfd9dd2f3dbcb7c92b5b985d8b992152f516f14acef576e85263`; Plugin Check: no errors.
+  Only readme.txt line 2 differs from the `06ddaa2` RC2 ZIP. No RC2 tag yet (owner's decision).
 
 ## Remaining
 
-1. `tablerefresh/readme.txt` line 2: `Contributors: tablerefresh` is still a placeholder (owner's
-   decision for RC2). Set the owner's WordPress.org username(s) before submission; that changes the
-   ZIP, so rebuild and re-run Plugin Check.
-2. Optional: deferred matrices (TablePress 3.1–3.4, MySQL 8.x); screen-reader pass.
-3. WordPress.org submission only with the owner's explicit approval.
+1. Optional: deferred matrices (TablePress 3.1–3.4, MySQL 8.x); screen-reader pass.
+2. WordPress.org submission only with the owner's explicit approval.
 
 ## Tools
 

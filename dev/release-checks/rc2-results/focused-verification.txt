@@ -46,3 +46,11 @@ Browser workflow (workflow.js) on a fresh site, plugin installed through Plugins
 -- not done in this round
 Other mutations (plugin code outside class-admin.php unchanged since RC1), repetitions beyond
 ConcurrencyTest, MyISAM and live-Google groups, db/wp/php/TablePress matrices, screen-reader pass.
+
+== 2026-10-27, contributor update (faaac1f)
+readme.txt "Contributors: arsenmanukyan" (owner confirmed; profiles.wordpress.org/arsenmanukyan exists).
+dist/tablerefresh-1.0.0-rc2-final.zip = sh dev/build-zip.sh faaac1f rc2-final, 25 files,
+SHA-256 defbb9fadef2bfd9dd2f3dbcb7c92b5b985d8b992152f516f14acef576e85263 (two builds identical;
+no CR bytes). Contents differ from the 06ddaa2 RC2 ZIP only in readme.txt line 2.
+Plugin Check 2.1.0, --include-experimental, this ZIP installed with WP-CLI: "Checks complete. No errors found."
+The 06ddaa2 ZIP (5d9f23ff...) is kept as the verified intermediate RC2 build.
