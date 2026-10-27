@@ -40,3 +40,10 @@ docker compose -f dev/docker-compose.yml run --rm cli wp tablerefresh sync 1 htt
 - Parallel-process tests start their commands together through `TABLEREFRESH_TEST_BARRIER`, so slow WordPress boots cannot serialize them.
 - `--repeat` suits tests that run separate `wp` processes; repeating the in-process download tests exceeds PHP's 128 MB `memory_limit` (PHPUnit keeps every repetition), so loop `run-tests.sh` instead.
 - Run one Docker operation at a time: the matrix stops the main project, and parallel runs share one database.
+- WP-Cron: WordPress starts scheduled events by requesting its own address (`http://localhost:<port>/wp-cron.php`).
+  On the dev site (:8089) that request cannot connect (Apache listens on port 80 in the container), so events never run
+  by themselves; this keeps background syncs out of the tests, which call `/wp-cron.php` or `wp cron event run`
+  explicitly. The clean RC site (:8090) also serves port 8090 inside the container (`rc-loopback.conf`), so its WP-Cron
+  runs on page visits as on a real site. `wp cron test` fails on both: WP-CLI runs in the separate `cli` container.
+  Every WP-CLI command also attempts a spawn there and sets WordPress's 60-second `doing_cron` lock, so a page visit
+  right after a WP-CLI command does not start WP-Cron.

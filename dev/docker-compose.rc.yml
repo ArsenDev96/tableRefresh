@@ -1,6 +1,7 @@
-# Clean WordPress site for release candidates: nothing of the development checkout is mounted.
+# Clean WordPress site for release candidates: no plugin code from the development checkout is mounted.
 # Plugins are installed from ZIP files in ../dist (see dev/rc-env.sh). No test mu-plugin, so the
-# production policies apply (for example, no downloads from private networks).
+# production policies apply (for example, no downloads from private networks). rc-loopback.conf
+# lets WordPress reach itself at http://localhost:8090, so WP-Cron runs on page visits.
 name: tablerefresh-rc
 
 services:
@@ -33,6 +34,7 @@ services:
       WORDPRESS_DB_NAME: wordpress
     volumes:
       - wp:/var/www/html
+      - ./rc-loopback.conf:/etc/apache2/conf-enabled/rc-loopback.conf:ro
 
   cli:
     image: ${CLI_IMAGE:-wordpress:cli}
