@@ -1,47 +1,59 @@
-# Handoff – 2026-10-27 (second machine, focused verification)
+# Handoff – 2026-10-27 (office → home computer)
 
 ## Where things stand
 
-- Branch `main`; tag `v1.0.0-rc1` = `472d940` (local only, recreated on this machine; not pushed).
-- Plugin code (`tablerefresh/`) is identical to `v1.0.0-rc1`. Later commits change only docs and dev tooling.
-- RC1 ZIP: `sh dev/build-zip.sh v1.0.0-rc1 rc1` → `dist/tablerefresh-1.0.0-rc1.zip`, 25 files,
-  SHA-256 `4079166f6d4d822ed12dcb5f97ea4c4007bee25cbb80028ee78dcabeeda33072` (reproducible now;
-  the earlier hash 5b5d393f… came from a build stamped with its build time).
-- Build script fixed: Git for Windows (`core.autocrlf=true`) made the ZIP ship CRLF files.
-- `.cache/`, `dist/`, browser `node_modules/` are not in git; `dev/setup.sh` and
-  `dev/release-checks/README.md` recreate them.
+- Branch `main`, based on `0eb2308`. Plugin version 1.0.0 (header, readme Stable tag, constant).
+- Tag `v1.0.0-rc1` = `472d940` (RC1). Its ZIP: `sh dev/build-zip.sh v1.0.0-rc1 rc1`, 25 files,
+  SHA-256 `4079166f6d4d822ed12dcb5f97ea4c4007bee25cbb80028ee78dcabeeda33072` with Git for Windows 2.45
+  (another Git/zlib version may compress differently: then compare the files, not the hash).
+- Plugin code changed after RC1 (`0626e32`, admin wording and remove confirmation), so the next ZIP is RC2.
+- GitHub repository is public; no Actions workflows, releases, or tags there (checked 2026-10-27).
 
-## Testing strategy (owner's decision, 2026-10-27)
+## Completed
 
-Focused security and data-integrity checks. The full TablePress (25), database (5), WordPress,
-PHP matrices and the complete 39-mutation run are deferred, not automatic.
+- Sync engine: CSV and public Google Sheets, atomic updates with recovery, conflict detection for
+  edits in TablePress, editor guard, SSRF/proxy/size limits, revision limits, WP-CLI.
+- Admin (Tools > TableRefresh): list, setup, settings and history, Sync now, keep/replace decision,
+  WP-Cron schedule (hourly/daily/weekly), pause after 5 failures.
+- RC1 verification: `dev/release-checks/rc1-results/focused-verification.txt` (suites, 29/39 mutations,
+  TablePress 3.0, browser workflow 36/36, Plugin Check). Automatic sync with the owner's editable Google
+  Sheet on the RC site: updated through WP-Cron on a normal page visit (25 → 58), 2026-10-27.
+- Dev: reproducible ZIP builds (LF, pinned mtime); RC site WP-Cron loopback (`dev/rc-loopback.conf`).
 
-## RC1 verification
+## Latest UI changes (after RC1)
 
-Results: `dev/release-checks/rc1-results/focused-verification.txt` (this round) and `summary.txt` (first round).
+- Setup page heading "Set up table sync"; table page "Settings and history: <name> (ID <id>)".
+- "Remove sync setup" replaces "Remove automatic sync"; needs an "I understand" checkbox (also checked
+  on the server). Tests and mutation "admin: remove without confirmation" added.
+- New WordPress.org screenshots (`release/wordpress-org-assets/`, made with `store-shots.js`).
 
-Passed on RC1:
-- PHP 7.4 full suite: 238 tests, 0 failures. PHP 8.3 full suite: 237/238 in each of two runs, a
-  different wall-clock assertion in `ConcurrencyTest` each time; both tests pass 10/10 in isolation
-  (timing on this machine, not a product defect). Earlier machine: 8.3, 7.4, and both with Redis clean.
-- Mutations: 29 of 39 caught, none survived (1–15 earlier; 16, 17, 19, 20, 22, 25, 28–32, 36, 37,
-  39 now, incl. the decoded-size abort that had been interrupted).
-- TablePress 3.0 (minimum) spot check: full suite + MyISAM group clean.
-- Clean site, plugin uploaded from the ZIP: browser workflow 36/36 (live public Google sample sheet
-  through the admin screen); Plugin Check 2.1.0 no errors.
-- Earlier on RC1: PHPCS clean; axe 0 violations, keyboard, RTL; upgrades; lifecycle.
+## Remaining for RC2
 
-Untested on RC1: TablePress 3.0.1–3.4 (3.4.1 is the default of every run); MySQL 5.7/8.0/8.4 and
-MariaDB 11.4; WordPress 6.7–7.0; PHP 8.0–8.2/8.4 CLI; Redis; repetitions; live-Google PHPUnit
-group; mutations 18, 21, 23, 24, 26, 27, 33, 34, 35, 38 (last caught on 65d09f6).
+1. `tablerefresh/readme.txt` line 2: `Contributors:` needs the owner's WordPress.org username.
+2. PHP 8.3 timing tests in `ConcurrencyTest` fail occasionally on slow machines (wall-clock limits);
+   make them robust (tests only).
+3. Build RC2 (`sh dev/build-zip.sh HEAD rc2`), then focused checks on it: PHP 8.3 + 7.4 suites, admin
+   mutations, browser workflow on `sh dev/rc-env.sh up`, Plugin Check.
+4. Optional: deferred matrices (TablePress 3.1–3.4, MySQL 8.x); screen-reader pass.
+5. WordPress.org submission only with the owner's explicit approval.
 
-## Open before a public release
+## Tools
 
-1. `tablerefresh/readme.txt` line 2: `Contributors: tablerefresh` is still a placeholder (owner's
-   decision for now). Changing it means a new ZIP (rc2 or final).
-2. Owner check with an editable Google Sheet they own (skipped this round).
-3. Optional: deferred matrices, at least TablePress 3.1–3.4 and MySQL 8.x.
-4. Optional: real screen-reader pass.
-5. WordPress.org submission needs the owner's explicit approval.
+Git (Git Bash on Windows), Docker Desktop with Compose v2, Node.js 18+ and npm, Google Chrome (browser
+checks; path in the scripts: `C:/Program Files/Google/Chrome/...`), internet for the first setup.
+Host PHP and Python are optional. Details: `dev/README.md`, `dev/release-checks/README.md`.
 
-No known critical bugs.
+## Continue on another computer
+
+```sh
+git clone https://github.com/ArsenDev96/tableRefresh.git && cd tableRefresh
+git log --oneline -1 && git tag -l           # HEAD = the handoff commit; v1.0.0-rc1 once it was pushed
+sh dev/setup.sh                               # dev site http://localhost:8089 (admin / admin)
+sh dev/run-tests.sh                           # PHP 8.3 suite; CLI_SERVICE=cli74 for PHP 7.4
+sh dev/build-zip.sh v1.0.0-rc1 rc1            # optional: compare with the RC1 hash above
+sh dev/rc-env.sh up                           # clean site http://localhost:8090, install ZIPs from dist/
+(cd dev/release-checks/browser && npm ci)     # browser checks
+```
+
+`.cache/`, `dist/`, `node_modules/` and Docker volumes are not in Git; the commands above recreate them.
+The office RC site's data (test tables) is not transferred and not needed.
