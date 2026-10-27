@@ -54,6 +54,9 @@ const sleep = ( ms ) => new Promise( ( r ) => setTimeout( r, ms ) );
 		await submitAndWait( '#wp-submit' );
 	}
 
+	// Neutral site title in the toolbar.
+	wp( "update_option( 'blogname', 'Example Site' );" );
+
 	// A TablePress table to fill. Created through TablePress's model, not its "Add" screen: that screen
 	// opens the new table in the editor, and an open editor rightly holds automatic syncs for 15 minutes.
 	const tableId = wp( "wp_set_current_user( 1 ); $t = TablePress::$model_table->get_table_template(); $t['name'] = 'Class roster'; $t['data'] = array( array( '' ) ); $t['visibility'] = array( 'rows' => array( 1 ), 'columns' => array( 1 ) ); echo TablePress::$model_table->add( $t );" );

@@ -41,10 +41,22 @@
   SHA-256 `defbb9fadef2bfd9dd2f3dbcb7c92b5b985d8b992152f516f14acef576e85263`; Plugin Check: no errors.
   Only readme.txt line 2 differs from the `06ddaa2` RC2 ZIP. No RC2 tag yet (owner's decision).
 
+## After RC2: top-level menu (9d79fae)
+
+- TableRefresh is a top-level admin menu directly below TablePress (was Tools > TableRefresh), with an
+  original table-and-sync icon. Position follows TablePress (top/middle/bottom); `menu_order` keeps it
+  adjacent on collisions; without a TablePress top-level entry it goes after the content menus. The
+  former `tools.php?page=tablerefresh` redirects to `admin.php?page=tablerefresh`. No sync engine change.
+- Checked on a test ZIP (`sh dev/build-zip.sh 9d79fae menu`): PHP 8.3 full suite OK (242 tests),
+  AdminScreenTest on PHP 7.4 OK, PHPCS clean, 7 menu mutations caught (2 added to mutation-check.sh),
+  browser workflow 38/38 (2 new menu checks), Plugin Check no errors. New WordPress.org screenshots.
+- The plugin changed after RC2, so the next release build is RC3.
+
 ## Remaining
 
-1. Optional: deferred matrices (TablePress 3.1–3.4, MySQL 8.x); screen-reader pass.
-2. WordPress.org submission only with the owner's explicit approval.
+1. Build RC3 from the menu change and re-run focused checks before submission.
+2. Optional: deferred matrices (TablePress 3.1–3.4, MySQL 8.x); screen-reader pass.
+3. WordPress.org submission only with the owner's explicit approval.
 
 ## Tools
 
