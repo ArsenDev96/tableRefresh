@@ -1,0 +1,57 @@
+== 2026-10-27, focused verification of v1.0.0 RC3 (a50494c), home machine (Windows 11, Docker 20.10.22)
+Strategy (owner's decision): focused regression checks; no compatibility matrices.
+WordPress 7.1.3, TablePress 3.4.1, MariaDB 10.11.19, WP-CLI PHP 8.3.36 / 7.4.33, Git for Windows 2.46.2.
+
+-- changes since RC2 (faaac1f)
+Plugin: 9d79fae top-level TableRefresh admin menu directly below TablePress (original table-and-sync
+icon; position from TablePress's entry, menu_order on collisions, content-menu fallback; former
+tools.php?page=tablerefresh redirects to admin.php?page=tablerefresh). readme.txt and POT references.
+No sync engine change. Owner approved the interface for V1 after the RC site review.
+
+-- RC identity
+Working tree clean; HEAD = origin/main = a50494c.
+dist/tablerefresh-1.0.0-rc3.zip = sh dev/build-zip.sh a50494c rc3, 25 files, 75,919 bytes,
+SHA-256 11ecefc9f26c5df83ae1807729e72ef475a8c564f0f6ea0ca23d7d030d921cb4 (two builds identical).
+One top-level folder tablerefresh/; every file byte-identical to its blob in a50494c; no CR bytes;
+no debug or test code; same files as the reviewed test build tablerefresh-1.0.0-menu.zip (9d79fae).
+
+-- metadata
+Plugin Name "TableRefresh – Auto Sync for TablePress" (header and readme); Contributors: arsenmanukyan;
+menu label "TableRefresh". Version 1.0.0 = readme Stable tag = TABLEREFRESH_VERSION. Requires at
+least 6.7, Tested up to 7.1, Requires PHP 7.4, Requires Plugins: tablepress (TablePress >= 3.0 checked
+at runtime). GPL-2.0-or-later / GPLv2 or later. Short description 117 characters; 5 tags.
+release/wordpress-org-assets: icons 128/256 px + SVG, banners 772x250 / 1544x500, screenshots 1-5
+(new top-level menu) matching the readme captions.
+
+-- suites
+PHP 8.3 + Redis, full suite: OK (242 tests, 2161 assertions)
+PHP 7.4 + Redis, full suite, run 1: 1 failure, ScheduledSyncTest::test_many_due_tables_with_overlapping_cron_runners
+PHP 7.4 + Redis, full suite, run 2: OK (242 tests, 2161 assertions)
+PHPCS (WPCS 3.1 + PHPCompatibilityWP, testVersion 7.4-): no findings.
+
+-- open issue (pre-existing, not an RC3 regression)
+test_many_due_tables_with_overlapping_cron_runners (two simultaneous `wp cron event run --due-now`,
+which bypass WP-Cron's lock, over 25 due tables): every table is synchronized exactly once, but on
+PHP 7.4 one table can end with no scheduled event ("Table N has one event. 0 is identical to 1").
+   test x15, PHP 7.4 + Redis:    2 failures
+   test x15, PHP 7.4, no Redis:  2 failures
+   test x15, PHP 8.3 + Redis:    0 failures
+Scheduler and Sync_Runner are unchanged since 0.2.0 (99554bd). Effect: automatic sync of that table
+stops until an administrator opens the TableRefresh list screen, which re-adds lost events
+(Scheduler::reconcile). Table data is not affected. Not fixed in RC3 (sync engine unchanged by
+decision); owner to decide: accept for 1.0.0 or fix in an RC4.
+
+-- upgrade RC2 -> RC3 (separate throwaway site on :8090, removed afterwards; owner's RC site untouched)
+RC2 (tablerefresh-1.0.0-rc2-final.zip) with three Google-sheet tables set up through Sync_Runner:
+hourly (enabled), weekly (enabled), daily (automatic sync off); setup + manual sync each.
+RC3 installed over the active plugin (wp plugin install --force, no deactivation): installed files ==
+RC3 ZIP. Snapshot before/after (table content, meta, revisions, configurations, sync state, history,
+WP-Cron events): identical. After admin visits (Dashboard, list screen with its reconcile, settings
+and history, former Tools URL -> 302 to the same view): identical; menu order ... TablePress >
+TableRefresh ...; one TableRefresh menu link. Scheduled events run under RC3: both "unchanged",
+each rescheduled with exactly one event; the manual-only table still has none; table data unchanged.
+Plugin Check 2.1.0, --include-experimental, on the installed RC3: "Checks complete. No errors found."
+
+-- not done in this round
+Browser workflow on RC3 (files identical to the menu build, which passed 38/38 on 2026-10-27),
+mutations beyond the admin menu set, MyISAM and live-Google PHPUnit groups, matrices, screen-reader pass.

@@ -52,9 +52,18 @@
   browser workflow 38/38 (2 new menu checks), Plugin Check no errors. New WordPress.org screenshots.
 - The plugin changed after RC2, so the next release build is RC3.
 
+## RC3 (2026-10-27)
+
+- RC3 = `a50494c` (not tagged; interface approved for V1). ZIP: `sh dev/build-zip.sh a50494c rc3`, 25 files,
+  SHA-256 `11ecefc9f26c5df83ae1807729e72ef475a8c564f0f6ea0ca23d7d030d921cb4`; files identical to the menu build.
+- Checks: `dev/release-checks/rc3-results/focused-verification.txt` (suites, PHPCS, Plugin Check, RC2 -> RC3
+  upgrade with tables, settings, history and scheduled events preserved).
+
 ## Remaining
 
-1. Build RC3 from the menu change and re-run focused checks before submission.
+1. Owner decision on the pre-existing PHP 7.4 race in `test_many_due_tables_with_overlapping_cron_runners`
+   (a table can lose its next scheduled event when two cron runners overlap; repaired when the list screen
+   is opened): accept for 1.0.0 or fix in an RC4. See the RC3 results.
 2. Optional: deferred matrices (TablePress 3.1–3.4, MySQL 8.x); screen-reader pass.
 3. WordPress.org submission only with the owner's explicit approval.
 
