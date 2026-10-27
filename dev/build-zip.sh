@@ -22,7 +22,14 @@ fi
 mkdir -p dist
 zip="dist/tablerefresh-$version${suffix:+-$suffix}.zip"
 rm -f "$zip"
-git archive --format=zip --prefix=tablerefresh/ -o "$zip" "$commit:tablerefresh"
+# The root .gitattributes (eol=lf) does not apply to a subtree archive, so Git for Windows'
+# core.autocrlf=true would ship CRLF files; --mtime makes the ZIP reproducible (a tree has no date).
+git -c core.autocrlf=false archive --format=zip --prefix=tablerefresh/ \
+	--mtime="$(git log -1 --format=%cI "$commit")" -o "$zip" "$commit:tablerefresh"
+if [ "$(unzip -p "$zip" | tr -dc '\r' | wc -c)" -ne 0 ]; then
+	echo "CRLF line endings in $zip" >&2
+	exit 1
+fi
 
 # Allowlist of shipped paths.
 unexpected=$(unzip -Z1 "$zip" | grep -vE '^tablerefresh/((includes/class-[a-z-]+\.php|assets/admin\.(css|js)|languages/tablerefresh\.pot|tablerefresh\.php|uninstall\.php|readme\.txt)|(includes|assets|languages)/)?$' || true)

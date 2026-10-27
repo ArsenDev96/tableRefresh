@@ -3,6 +3,7 @@
 const puppeteer = require( 'puppeteer-core' );
 const { execFileSync } = require( 'child_process' );
 const path = require( 'path' );
+const REPO = path.resolve( __dirname, '../../..' ).replace( /\\/g, '/' );
 const fs = require( 'fs' );
 
 const BASE = 'http://localhost:8090';
@@ -16,7 +17,7 @@ const check = ( ok, label, detail = '' ) => {
 	results.push( ( ok ? 'PASS ' : 'FAIL ' ) + label + ( detail ? ' — ' + detail : '' ) );
 	console.log( results[ results.length - 1 ] );
 };
-const wp = ( code ) => execFileSync( 'C:/Program Files/Git/bin/bash.exe', [ '-c', 'cd /e/tableRefresh && sh dev/rc-env.sh wp eval "$0" 2>/dev/null | tail -1', code ], { encoding: 'utf8' } ).trim();
+const wp = ( code ) => execFileSync( 'C:/Program Files/Git/bin/bash.exe', [ '-c', 'cd "' + REPO + '" && sh dev/rc-env.sh wp eval "$0" 2>/dev/null | tail -1', code ], { encoding: 'utf8' } ).trim();
 const sleep = ( ms ) => new Promise( ( r ) => setTimeout( r, ms ) );
 
 ( async () => {
@@ -65,7 +66,7 @@ const sleep = ( ms ) => new Promise( ( r ) => setTimeout( r, ms ) );
 	await page.evaluate( () => [ ...document.querySelectorAll( 'button' ) ].find( ( b ) => 'Save Changes' === b.textContent.trim() ).click() );
 	await sleep( 3000 );
 	const optionsBefore = wp( `echo get_post_meta( TableRefresh\\TablePress_Adapter::get_post_id( '${ tableId }' ), '_tablepress_table_options', true );` );
-	const pageId = execFileSync( 'C:\\Program Files\\Git\\bin\\bash.exe', [ '-c', `cd /e/tableRefresh && sh dev/rc-env.sh wp post create --post_type=page --post_status=publish --post_title=Roster --post_content='[table id=${ tableId } /]' --porcelain 2>/dev/null | tail -1` ], { encoding: 'utf8' } ).trim();
+	const pageId = execFileSync( 'C:\\Program Files\\Git\\bin\\bash.exe', [ '-c', `cd "${ REPO }" && sh dev/rc-env.sh wp post create --post_type=page --post_status=publish --post_title=Roster --post_content='[table id=${ tableId } /]' --porcelain 2>/dev/null | tail -1` ], { encoding: 'utf8' } ).trim();
 
 	// 3. Connect the public Google Sheet and run the first sync.
 	await go( trPage );

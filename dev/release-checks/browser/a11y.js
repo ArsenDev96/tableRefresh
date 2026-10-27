@@ -2,13 +2,14 @@
 const puppeteer = require( 'puppeteer-core' );
 const { execFileSync } = require( 'child_process' );
 const path = require( 'path' );
+const REPO = path.resolve( __dirname, '../../..' ).replace( /\\/g, '/' );
 const fs = require( 'fs' );
 
 const BASE = 'http://localhost:8090';
 const OUT = path.join( __dirname, 'rc' );
 const AXE = require.resolve( 'axe-core/axe.min.js' );
-const bash = ( cmd ) => execFileSync( 'C:/Program Files/Git/bin/bash.exe', [ '-c', 'cd /e/tableRefresh && ' + cmd + ' 2>/dev/null | tail -1' ], { encoding: 'utf8' } ).trim();
-const wp = ( code ) => execFileSync( 'C:/Program Files/Git/bin/bash.exe', [ '-c', 'cd /e/tableRefresh && sh dev/rc-env.sh wp eval "$0" 2>/dev/null | tail -1', code ], { encoding: 'utf8' } ).trim();
+const bash = ( cmd ) => execFileSync( 'C:/Program Files/Git/bin/bash.exe', [ '-c', 'cd "' + REPO + '" && ' + cmd + ' 2>/dev/null | tail -1' ], { encoding: 'utf8' } ).trim();
+const wp = ( code ) => execFileSync( 'C:/Program Files/Git/bin/bash.exe', [ '-c', 'cd "' + REPO + '" && sh dev/rc-env.sh wp eval "$0" 2>/dev/null | tail -1', code ], { encoding: 'utf8' } ).trim();
 const out = [];
 const log = ( line ) => { out.push( line ); console.log( line ); };
 

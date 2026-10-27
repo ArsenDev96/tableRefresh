@@ -89,7 +89,9 @@ TablePress matrix was stopped during 3.0.4 (18:21 UTC) when the full matrix was 
 the stop condition matched an older 3.0.4 row, so it fired before 3.0.4 finished; its test
 container was left to finish (exit 0) and only its throwaway project was removed.
 
--- known residual (not reproduced, not fixed): Table_Updater::undo() treats a table that cannot
+-- known residual, FIXED after this run by 548cb65 (mutation "revert claimed for a table that
+   could not be read" caught on v1.0.0-rc1, see dev/release-checks/rc1-results/focused-verification.txt):
+   Table_Updater::undo() treats a table that cannot
    be read at all as "not this update's write" and reports reverted: true without confirmation.
    A lost connection does not reach this path in tests (wpdb reconnects, or bails after its
    retries, ending the process before any report; the journal stays). Fail-closed handling

@@ -7,3 +7,10 @@
 
 # Release builds (dev/build-zip.sh).
 /dist/
+
+# Browser checks (dev/release-checks/browser): dependencies, Chrome profile, outputs.
+/dev/release-checks/browser/node_modules/
+/dev/release-checks/browser/profile-rc/
+/dev/release-checks/browser/rc/
+/dev/release-checks/browser/*.zip
+/dev/release-checks/browser/*.png

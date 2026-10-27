@@ -1,0 +1,64 @@
+== 2026-10-27, focused verification of v1.0.0-rc1 (472d940), second machine (Windows 10, Docker 26.1)
+Strategy (owner's decision): focused security and data-integrity checks; the full TablePress,
+database, WordPress and PHP matrices and the complete mutation run are deferred.
+Plugin code (tablerefresh/) at HEAD identical to 472d940. Fresh environment (docker compose
+down -v; dev/setup.sh). WordPress 7.1.3, TablePress 3.4.1, MariaDB 10.11.19 unless stated.
+
+-- RC identity
+Tag v1.0.0-rc1 was local-only on the first machine; recreated locally on 472d940 (not pushed).
+ZIP rebuilt from the tag: 25 files, every file byte-identical to its blob in 472d940.
+The SHA-256 in HANDOFF.md (5b5d393f...) cannot be reproduced by design: git archive of a tree
+stamps the build time. dev/build-zip.sh now pins --mtime to the commit date (reproducible).
+Defect in the build script, fixed: on Git for Windows (core.autocrlf=true) the ZIP shipped
+CRLF line endings, because the root .gitattributes (eol=lf) does not apply to a subtree
+archive. Now built with core.autocrlf=false, and a CRLF check fails the build.
+dist/tablerefresh-1.0.0-rc1.zip SHA-256 4079166f6d4d822ed12dcb5f97ea4c4007bee25cbb80028ee78dcabeeda33072
+(two builds identical; no CR bytes; no debug code).
+
+-- suites
+PHP 7.4, full suite:  Tests: 238, Assertions: 2072, Skipped: 4 (no failures; Redis-only skips)
+PHP 8.3, full suite, run 1: 1 failure, ConcurrencyTest::test_different_tables_sync_in_parallel
+   (both syncs "updated", but 11.9 s > 7 s limit; first run after a fresh setup)
+PHP 8.3, full suite, run 2: 1 failure, ConcurrencyTest::test_process_that_outlived_its_lock_does_not_write
+   (B was refused with tablerefresh_locked: A's lock had not expired yet after the fixed 3.5 s sleep)
+   In isolation: test_different_tables_sync_in_parallel x10 OK, same-table x5 OK,
+   test_process_that_outlived_its_lock_does_not_write x10 OK.
+   Assessment: wall-clock assertions vs. slow wp process boots on this machine under full-suite
+   load; in both cases the plugin behaved safely. Not a product defect; test hardening optional.
+
+-- mutations (CLI_SERVICE=cli74, PHP 7.4 / libcurl 7.83; no Redis): 14 of 14 caught
+caught    no decoded-size abort (caught only with libcurl < 8.4: CLI_SERVICE=cli74) -> Tests: 1, Assertions: 3, Failures: 1.
+caught    truncation not reported -> Tests: 2, Assertions: 4, Failures: 2.
+caught    editor guard without nonce check -> Tests: 1, Assertions: 9, Failures: 1.
+caught    database errors during the write ignored -> Tests: 9, Assertions: 106, Failures: 3.
+caught    writes not blocked after a database error -> Tests: 9, Assertions: 111, Failures: 3.
+caught    recovery ignores writes committed outside the transaction -> Tests: 1, Assertions: 12, Failures: 1.
+caught    admin: no permission check -> Tests: 1, Assertions: 14, Failures: 1.
+caught    admin: no nonce check -> Tests: 1, Assertions: 9, Failures: 1.
+caught    admin: replace without confirmation -> Tests: 1, Assertions: 16, Failures: 1.
+caught    admin: setup without confirmation -> Tests: 1, Assertions: 7, Failures: 1.
+caught    runner: syncs overwrite manual edits -> Tests: 1, Assertions: 6, Failures: 1.
+caught    revert claimed for a table that could not be read -> Tests: 2, Assertions: 12, Failures: 2.
+caught    recovery discards a backup after a read error -> Tests: 2, Assertions: 22, Failures: 2.
+caught    editor sessions of other users ignored -> Tests: 1, Assertions: 22, Failures: 1.
+(Mutations 16, 17, 19, 20, 22, 25, 28-32, 36, 37, 39 of dev/mutation-check.sh. With 1-15 from the
+first RC1 run: 29 of 39 caught on RC1. Not run on RC1: 18 (needs Redis), 21, 23, 24, 26, 27, 33,
+34, 35, 38; all caught on 65d09f6 or covered by a run mutation of the same test.)
+
+-- TablePress spot check (dev/matrix-results.txt)
+TablePress 3.0 (minimum supported): suite Tests: 238, Assertions: 2072, Skipped: 4, no failures;
+   engine group (MyISAM) OK (3 tests, 23 assertions).
+
+-- clean site from the ZIP (dev/rc-env.sh up; http://localhost:8090)
+Browser workflow (workflow.js), plugin installed through Plugins > Add New > Upload: 36/36 PASS
+   (same checks as browser-workflow.txt), including first sync and changed-data sync from the live
+   public Google sample sheet through the admin screen, conflict keep/replace, SSRF refusal,
+   no JavaScript errors, empty debug.log.
+Plugin Check 2.1.0, --include-experimental: "Checks complete. No errors found."
+
+-- not done in this round
+Editable Google Sheet owned by the project owner (owner chose to skip; the workflow uses Google's
+read-only sample sheet, changed through a query URL). Redis suites, repetitions, live-Google
+PHPUnit group, MyISAM on 8.3/7.4 main stack, db/wp/php matrices, TablePress 3.0.1-3.4
+(3.4.1 is the default of every run). Screen-reader pass. PHPCS not re-run (plugin code unchanged
+since the clean run on RC1).

@@ -13,9 +13,11 @@ Scripts used to verify a release candidate. They are not part of the plugin ZIP.
   - `a11y.js`, `a11y2.js`: axe, keyboard order and visible focus, RTL, on the same site.
   - `shots.js`: screenshots of the dev site (http://localhost:8089).
   - `assets.js`: renders `release/wordpress-org-assets/` icons and banners.
-  - Paths are those of the Windows machine they were written on (`C:/Program Files/Google/Chrome/...`,
-    `C:/Program Files/Git/bin/bash.exe`, `/e/tableRefresh`); adjust them on another machine.
-- `rc1-results/`: results for v1.0.0-rc1 (472d940); the run was stopped partway, see `summary.txt`.
+  - Chrome and Git Bash are expected at `C:/Program Files/Google/Chrome/...` and
+    `C:/Program Files/Git/bin/bash.exe`; the repository path is derived from the script location.
+  - `workflow.js` uploads `tablerefresh.zip` from this folder: copy the ZIP from `dist/` first.
+- `rc1-results/`: results for v1.0.0-rc1 (472d940): `summary.txt` (first run, stopped partway) and
+  `focused-verification.txt` (focused checks of 2026-10-27).
 
 Coding standards and Plugin Check (no host PHP needed):
 
