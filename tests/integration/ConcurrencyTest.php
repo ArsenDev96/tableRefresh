@@ -40,17 +40,25 @@ class ConcurrencyTest extends Integration_Test_Case {
 	public function test_different_tables_sync_in_parallel() {
 		$first  = $this->create_table( array( array( 'a' ) ) );
 		$second = $this->create_table( array( array( 'b' ) ) );
-		$url    = $this->fixture( 'slow.csv', "p,q\n", 'delay=2' );
+		$url    = $this->fixture( 'slow.csv', "p,q\n", 'delay=3' );
 
 		$barrier = array( 'TABLEREFRESH_TEST_BARRIER' => uniqid( 'different' ) . ':2' );
-		$start   = microtime( true );
 		$a       = $this->start_cli( array( 'sync', $first, $url ), $barrier );
 		$b       = $this->start_cli( array( 'sync', $second, $url ), $barrier );
+
+		// Both locks are held at the same time during the slow downloads. Observed state instead
+		// of a wall-clock limit, which slow WordPress boots under full-suite load exceeded.
+		$overlapped = $this->poll_while_running(
+			array( $a, $b ),
+			static function () use ( $first, $second ) {
+				return Table_Lock::is_locked( $first ) && Table_Lock::is_locked( $second );
+			}
+		);
 		foreach ( array( $a, $b ) as $handle ) {
 			$run = $this->wait_cli( $handle );
 			$this->assertSame( 'updated', $run['json']['status'] ?? null, $run['stdout'] . $run['stderr'] );
 		}
-		$this->assertLessThan( 7, microtime( true ) - $start, 'Different tables must not block each other.' );
+		$this->assertTrue( $overlapped, 'Different tables must not block each other.' );
 	}
 
 	public function test_process_that_outlived_its_lock_does_not_write() {
@@ -59,7 +67,20 @@ class ConcurrencyTest extends Integration_Test_Case {
 		$fast     = $this->fixture( 'fast.csv', "fast\n" );
 
 		$a = $this->start_cli( array( 'sync', $table_id, $slow ), array( 'TABLEREFRESH_TEST_LOCK_TTL' => '2' ) );
-		usleep( 3500000 );
+
+		// Wait until A holds its lock (however long its boot takes), then until that lock expired.
+		$expires = 0;
+		$this->poll_while_running(
+			array( $a ),
+			function () use ( $table_id, &$expires ) {
+				$expires = $this->lock_expiry( $table_id );
+				return $expires > 0;
+			}
+		);
+		$this->assertGreaterThan( 0, $expires, 'A must acquire the lock.' );
+		while ( time() < $expires ) {
+			usleep( 50000 );
+		}
 		$b = $this->sync( $table_id, $fast ); // Takes over the expired lock while A is still downloading.
 		$this->assertIsArray( $b, is_wp_error( $b ) ? $b->get_error_message() : '' );
 		$this->assertTrue( $b['took_over'] );
@@ -98,5 +119,40 @@ class ConcurrencyTest extends Integration_Test_Case {
 		$this->assertInstanceOf( Table_Lock::class, $fourth );
 		$this->assertFalse( $fourth->took_over() );
 		$this->assertTrue( $fourth->release() );
+	}
+
+	/**
+	 * Polls a condition every 20 ms until it holds or one of the processes has exited.
+	 *
+	 * @param array<int, array{0: resource, 1: array<int, resource>}> $handles   Handles from start_cli().
+	 * @param callable                                               $condition Returns true when met.
+	 * @return bool Whether the condition was met.
+	 */
+	private function poll_while_running( array $handles, callable $condition ): bool {
+		$deadline = microtime( true ) + 120;
+		while ( microtime( true ) < $deadline ) {
+			if ( $condition() ) {
+				return true;
+			}
+			foreach ( $handles as $handle ) {
+				if ( ! proc_get_status( $handle[0] )['running'] ) {
+					return (bool) $condition();
+				}
+			}
+			usleep( 20000 );
+		}
+		return false;
+	}
+
+	/**
+	 * Expiry time of a table's lock row, read directly from the database.
+	 *
+	 * @param string $table_id Table ID.
+	 * @return int Unix time, or 0 if there is no lock row.
+	 */
+	private function lock_expiry( string $table_id ): int {
+		global $wpdb;
+		$value = $wpdb->get_var( $wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", Table_Lock::option_name( $table_id ) ) );
+		return null === $value ? 0 : (int) strtok( (string) $value, '|' );
 	}
 }
