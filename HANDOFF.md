@@ -15,7 +15,7 @@
 
 - Sync engine: CSV and public Google Sheets, atomic updates with recovery, conflict detection for
   edits in TablePress, editor guard, SSRF/proxy/size limits, revision limits, WP-CLI.
-- Admin (Tools > TableRefresh): list, setup, settings and history, Sync now, keep/replace decision,
+- Admin (top-level TableRefresh menu, below TablePress): list, setup, settings and history, Sync now, keep/replace decision,
   WP-Cron schedule (hourly/daily/weekly), pause after 5 failures.
 - RC1 verification: `dev/release-checks/rc1-results/focused-verification.txt` (suites, 29/39 mutations,
   TablePress 3.0, browser workflow 36/36, Plugin Check). Automatic sync with the owner's editable Google

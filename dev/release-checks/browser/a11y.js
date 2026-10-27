@@ -1,4 +1,4 @@
-// Accessibility review of Tools > TableRefresh in the RC site: axe-core (WCAG 2.1 A/AA), keyboard, semantics, RTL.
+// Accessibility review of the TableRefresh screen in the RC site: axe-core (WCAG 2.1 A/AA), keyboard, semantics, RTL.
 const puppeteer = require( 'puppeteer-core' );
 const { execFileSync } = require( 'child_process' );
 const path = require( 'path' );
@@ -18,7 +18,7 @@ const log = ( line ) => { out.push( line ); console.log( line ); };
 	const page = await browser.newPage();
 	await page.setViewport( { width: 1280, height: 900 } );
 	const go = async ( url ) => page.goto( BASE + url, { waitUntil: 'networkidle2' } );
-	const tr = '/wp-admin/tools.php?page=tablerefresh';
+	const tr = '/wp-admin/admin.php?page=tablerefresh';
 	await go( '/wp-login.php' );
 	if ( await page.$( '#user_login' ) ) {
 		await page.type( '#user_login', 'admin' );

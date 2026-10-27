@@ -28,448 +28,448 @@ msgstr ""
 msgid "TableRefresh contributors"
 msgstr ""
 
-#: includes/class-admin.php:98
+#: includes/class-admin.php:109
 msgid "TableRefresh – automatic sync for TablePress tables"
 msgstr ""
 
-#: includes/class-admin.php:99
-#: includes/class-admin.php:191
-#: includes/class-admin.php:222
+#: includes/class-admin.php:110
+#: includes/class-admin.php:270
+#: includes/class-admin.php:301
 msgid "TableRefresh"
 msgstr ""
 
-#: includes/class-admin.php:116
+#: includes/class-admin.php:195
 msgid "Set up"
 msgstr ""
 
-#: includes/class-admin.php:132
+#: includes/class-admin.php:211
 msgid "Syncing…"
 msgstr ""
 
 #. translators: %d: number of tables.
-#: includes/class-admin.php:152
+#: includes/class-admin.php:231
 #, php-format
 msgid "TableRefresh: automatic sync is paused for %d table and needs your decision."
 msgid_plural "TableRefresh: automatic sync is paused for %d tables and needs your decision."
 msgstr[0] ""
 msgstr[1] ""
 
-#: includes/class-admin.php:157
+#: includes/class-admin.php:236
 msgid "Review"
 msgstr ""
 
-#: includes/class-admin.php:223
-#: includes/class-admin.php:234
+#: includes/class-admin.php:302
+#: includes/class-admin.php:313
 msgid "Set up a table"
 msgstr ""
 
-#: includes/class-admin.php:226
+#: includes/class-admin.php:305
 msgid "Keep TablePress tables up to date with a CSV file or a public Google Sheet. TableRefresh replaces the table data with the data from the source; the table name, description, options, and shortcode stay the same."
 msgstr ""
 
-#: includes/class-admin.php:230
+#: includes/class-admin.php:309
 msgid "Get started"
 msgstr ""
 
-#: includes/class-admin.php:231
+#: includes/class-admin.php:310
 msgid "Create the table in TablePress, if it does not exist yet."
 msgstr ""
 
-#: includes/class-admin.php:232
+#: includes/class-admin.php:311
 msgid "Copy the link to your CSV file or Google Sheet."
 msgstr ""
 
-#: includes/class-admin.php:233
+#: includes/class-admin.php:312
 msgid "Choose \"Set up a table\", pick the table, paste the link, and choose how often to sync."
 msgstr ""
 
-#: includes/class-admin.php:236
+#: includes/class-admin.php:315
 msgid "Tables with automatic sync"
 msgstr ""
 
-#: includes/class-admin.php:237
-#: includes/class-admin.php:246
-#: includes/class-admin.php:321
+#: includes/class-admin.php:316
+#: includes/class-admin.php:325
+#: includes/class-admin.php:400
 msgid "Table"
 msgstr ""
 
-#: includes/class-admin.php:238
-#: includes/class-admin.php:249
+#: includes/class-admin.php:317
+#: includes/class-admin.php:328
 msgid "Source"
 msgstr ""
 
-#: includes/class-admin.php:239
-#: includes/class-admin.php:250
-#: includes/class-admin.php:355
+#: includes/class-admin.php:318
+#: includes/class-admin.php:329
+#: includes/class-admin.php:434
 msgid "Automatic sync"
 msgstr ""
 
-#: includes/class-admin.php:240
-#: includes/class-admin.php:251
+#: includes/class-admin.php:319
+#: includes/class-admin.php:330
 msgid "Last sync"
 msgstr ""
 
-#: includes/class-admin.php:241
+#: includes/class-admin.php:320
 msgid "Actions"
 msgstr ""
 
 #. translators: 1: table name, 2: table ID.
-#: includes/class-admin.php:244
-#: includes/class-admin.php:286
-#: includes/class-admin.php:326
+#: includes/class-admin.php:323
+#: includes/class-admin.php:365
+#: includes/class-admin.php:405
 msgid "(no name)"
 msgstr ""
 
 #. translators: %s: table ID.
-#: includes/class-admin.php:248
+#: includes/class-admin.php:327
 #, php-format
 msgid "Table ID %s"
 msgstr ""
 
-#: includes/class-admin.php:255
+#: includes/class-admin.php:334
 msgid "Review changes"
 msgstr ""
 
-#: includes/class-admin.php:259
+#: includes/class-admin.php:338
 msgid "Settings and history"
 msgstr ""
 
 #. translators: 1: table name, 2: table ID.
-#: includes/class-admin.php:286
-#: includes/class-admin.php:326
+#: includes/class-admin.php:365
+#: includes/class-admin.php:405
 #, php-format
 msgid "%1$s (ID %2$s)"
 msgstr ""
 
 #. translators: %s: table name and ID, e.g. "Prices (ID 3)".
-#: includes/class-admin.php:288
+#: includes/class-admin.php:367
 #, php-format
 msgid "Settings and history: %s"
 msgstr ""
 
 #. translators: %s: table name and ID, e.g. "Prices (ID 3)".
-#: includes/class-admin.php:288
+#: includes/class-admin.php:367
 msgid "Set up table sync"
 msgstr ""
 
-#: includes/class-admin.php:289
+#: includes/class-admin.php:368
 msgid "All tables"
 msgstr ""
 
-#: includes/class-admin.php:308
+#: includes/class-admin.php:387
 msgid "There are no TablePress tables yet. Create a table in TablePress first; TableRefresh fills existing tables."
 msgstr ""
 
-#: includes/class-admin.php:308
+#: includes/class-admin.php:387
 msgid "All your TablePress tables are already set up for automatic sync. To sync another table, create it in TablePress first."
 msgstr ""
 
-#: includes/class-admin.php:309
+#: includes/class-admin.php:388
 msgid "Add a table in TablePress"
 msgstr ""
 
-#: includes/class-admin.php:323
+#: includes/class-admin.php:402
 msgid "— Select a table —"
 msgstr ""
 
-#: includes/class-admin.php:337
+#: includes/class-admin.php:416
 msgid "Open in TablePress"
 msgstr ""
 
-#: includes/class-admin.php:341
+#: includes/class-admin.php:420
 msgid "Data source"
 msgstr ""
 
-#: includes/class-admin.php:343
+#: includes/class-admin.php:422
 msgid "The link to a CSV file, or a Google Sheets link."
 msgstr ""
 
-#: includes/class-admin.php:344
+#: includes/class-admin.php:423
 msgid "Google Sheets: click Share, set General access to \"Anyone with the link\", then click Copy link and paste it here. To use a tab other than the first one, open that tab before copying the link from the address bar."
 msgstr ""
 
-#: includes/class-admin.php:345
+#: includes/class-admin.php:424
 msgid "Private Google Sheets are not supported."
 msgstr ""
 
-#: includes/class-admin.php:345
+#: includes/class-admin.php:424
 msgid "Anyone who has the link can see the data of the sheet."
 msgstr ""
 
-#: includes/class-admin.php:348
+#: includes/class-admin.php:427
 msgid "How often"
 msgstr ""
 
-#: includes/class-admin.php:352
+#: includes/class-admin.php:431
 msgid "WordPress runs scheduled tasks when someone visits the site. On sites with few visitors, a sync can run later than planned."
 msgstr ""
 
-#: includes/class-admin.php:355
+#: includes/class-admin.php:434
 msgid "Sync automatically"
 msgstr ""
 
-#: includes/class-admin.php:356
+#: includes/class-admin.php:435
 msgid "Turn this off to keep the settings and sync only when you click \"Sync now\"."
 msgstr ""
 
-#: includes/class-admin.php:359
+#: includes/class-admin.php:438
 msgid "Replace table data"
 msgstr ""
 
-#: includes/class-admin.php:359
+#: includes/class-admin.php:438
 msgid "Replace the current content of this table with the data from the source."
 msgstr ""
 
-#: includes/class-admin.php:360
+#: includes/class-admin.php:439
 msgid "The rows and columns of the table are overwritten. After that, TableRefresh never overwrites changes that someone makes to the table in TablePress without asking you."
 msgstr ""
 
-#: includes/class-admin.php:363
+#: includes/class-admin.php:442
 msgid "Save and sync now"
 msgstr ""
 
-#: includes/class-admin.php:363
+#: includes/class-admin.php:442
 msgid "Save changes"
 msgstr ""
 
-#: includes/class-admin.php:370
+#: includes/class-admin.php:449
 msgid "Status"
 msgstr ""
 
-#: includes/class-admin.php:379
+#: includes/class-admin.php:458
 msgid "Stop syncing this table"
 msgstr ""
 
-#: includes/class-admin.php:380
+#: includes/class-admin.php:459
 msgid "Deletes the sync settings and the sync history of this table and stops automatic sync. The TablePress table and its data are not changed."
 msgstr ""
 
-#: includes/class-admin.php:384
+#: includes/class-admin.php:463
 msgid "I understand that the sync settings and history will be deleted."
 msgstr ""
 
-#: includes/class-admin.php:385
+#: includes/class-admin.php:464
 msgid "Remove sync setup"
 msgstr ""
 
-#: includes/class-admin.php:397
+#: includes/class-admin.php:476
 msgid "This table was changed in TablePress"
 msgstr ""
 
-#: includes/class-admin.php:398
+#: includes/class-admin.php:477
 msgid "Someone changed the table data in TablePress after the last sync. To keep those changes, TableRefresh did not update the table and paused automatic sync. Choose what to do:"
 msgstr ""
 
-#: includes/class-admin.php:400
-#: includes/class-admin.php:401
+#: includes/class-admin.php:479
+#: includes/class-admin.php:480
 msgid "Keep the changes"
 msgstr ""
 
-#: includes/class-admin.php:400
+#: includes/class-admin.php:479
 msgid "The table stays as it is and automatic sync is turned off."
 msgstr ""
 
-#: includes/class-admin.php:403
+#: includes/class-admin.php:482
 msgid "Use the source data"
 msgstr ""
 
-#: includes/class-admin.php:403
+#: includes/class-admin.php:482
 msgid "The changes made in TablePress are replaced with the current data from the source, and automatic sync continues."
 msgstr ""
 
-#: includes/class-admin.php:407
+#: includes/class-admin.php:486
 msgid "I understand that the changes made in TablePress will be lost."
 msgstr ""
 
-#: includes/class-admin.php:408
+#: includes/class-admin.php:487
 msgid "Replace with source data"
 msgstr ""
 
-#: includes/class-admin.php:411
+#: includes/class-admin.php:490
 msgid "Automatic sync is paused"
 msgstr ""
 
 #. translators: %d: number of attempts.
-#: includes/class-admin.php:413
+#: includes/class-admin.php:492
 #, php-format
 msgid "The last %d syncs failed, so automatic sync was paused. The table was not changed. Check the details below and the data source, then click \"Sync now\". A successful sync turns automatic sync back on."
 msgstr ""
 
-#: includes/class-admin.php:425
-#: includes/class-admin.php:440
+#: includes/class-admin.php:504
+#: includes/class-admin.php:519
 msgid "Recent syncs"
 msgstr ""
 
 #. translators: %s: date and time.
-#: includes/class-admin.php:428
+#: includes/class-admin.php:507
 #, php-format
 msgid "Last successful sync: %s"
 msgstr ""
 
-#: includes/class-admin.php:431
+#: includes/class-admin.php:510
 msgid "No syncs yet."
 msgstr ""
 
-#: includes/class-admin.php:435
-#: includes/class-admin.php:533
+#: includes/class-admin.php:514
+#: includes/class-admin.php:612
 msgid "Sync now"
 msgstr ""
 
-#: includes/class-admin.php:436
+#: includes/class-admin.php:515
 msgid "Automatic"
 msgstr ""
 
-#: includes/class-admin.php:437
+#: includes/class-admin.php:516
 msgid "Setup"
 msgstr ""
 
-#: includes/class-admin.php:438
+#: includes/class-admin.php:517
 msgid "Replaced changes"
 msgstr ""
 
-#: includes/class-admin.php:441
-#: includes/class-admin.php:445
+#: includes/class-admin.php:520
+#: includes/class-admin.php:524
 msgid "When"
 msgstr ""
 
-#: includes/class-admin.php:441
-#: includes/class-admin.php:446
+#: includes/class-admin.php:520
+#: includes/class-admin.php:525
 msgid "Started by"
 msgstr ""
 
-#: includes/class-admin.php:441
-#: includes/class-admin.php:447
+#: includes/class-admin.php:520
+#: includes/class-admin.php:526
 msgid "Result"
 msgstr ""
 
-#: includes/class-admin.php:441
-#: includes/class-admin.php:448
+#: includes/class-admin.php:520
+#: includes/class-admin.php:527
 msgid "Table data changed"
 msgstr ""
 
-#: includes/class-admin.php:441
-#: includes/class-admin.php:449
+#: includes/class-admin.php:520
+#: includes/class-admin.php:528
 msgid "Details"
 msgstr ""
 
-#: includes/class-admin.php:448
+#: includes/class-admin.php:527
 msgid "Yes"
 msgstr ""
 
-#: includes/class-admin.php:448
+#: includes/class-admin.php:527
 msgid "No"
 msgstr ""
 
-#: includes/class-admin.php:464
+#: includes/class-admin.php:543
 msgid "Paused: needs your decision"
 msgstr ""
 
-#: includes/class-admin.php:467
+#: includes/class-admin.php:546
 msgid "Off (only \"Sync now\")"
 msgstr ""
 
 #. translators: %s: time span, e.g. "5 hours".
-#: includes/class-admin.php:475
+#: includes/class-admin.php:554
 #, php-format
 msgid "Next sync in about %s"
 msgstr ""
 
-#: includes/class-admin.php:476
+#: includes/class-admin.php:555
 msgid "Next sync: waiting for WordPress to run scheduled tasks"
 msgstr ""
 
-#: includes/class-admin.php:492
+#: includes/class-admin.php:571
 msgid "Not synced yet"
 msgstr ""
 
 #. translators: %s: time span, e.g. "5 minutes".
-#: includes/class-admin.php:495
+#: includes/class-admin.php:574
 #, php-format
 msgid "%s ago"
 msgstr ""
 
 #. translators: %s: time span, e.g. "5 minutes".
-#: includes/class-admin.php:500
+#: includes/class-admin.php:579
 #, php-format
 msgid "Last successful sync %s ago"
 msgstr ""
 
-#: includes/class-admin.php:514
+#: includes/class-admin.php:593
 msgid "Updated"
 msgstr ""
 
-#: includes/class-admin.php:515
+#: includes/class-admin.php:594
 msgid "No changes"
 msgstr ""
 
-#: includes/class-admin.php:516
+#: includes/class-admin.php:595
 msgid "Not updated"
 msgstr ""
 
-#: includes/class-admin.php:517
+#: includes/class-admin.php:596
 msgid "Failed"
 msgstr ""
 
-#: includes/class-admin.php:557
+#: includes/class-admin.php:636
 msgid "This site runs WordPress scheduled tasks through a server cron job (DISABLE_WP_CRON). Automatic syncs run when that job calls wp-cron.php."
 msgstr ""
 
-#: includes/class-admin.php:559
+#: includes/class-admin.php:638
 msgid "Automatic syncs use WordPress scheduled tasks, which run when someone visits the site. On sites with few visitors, a sync can run later than planned."
 msgstr ""
 
-#: includes/class-admin.php:599
+#: includes/class-admin.php:678
 msgid "Select a table."
 msgstr ""
 
-#: includes/class-admin.php:605
+#: includes/class-admin.php:684
 msgid "The table could not be found in TablePress."
 msgstr ""
 
-#: includes/class-admin.php:608
+#: includes/class-admin.php:687
 msgid "This table is already set up for automatic sync."
 msgstr ""
 
-#: includes/class-admin.php:611
-#: includes/class-admin.php:717
+#: includes/class-admin.php:690
+#: includes/class-admin.php:796
 #: includes/class-sync-runner.php:81
 msgid "This table is no longer set up for automatic sync."
 msgstr ""
 
-#: includes/class-admin.php:619
+#: includes/class-admin.php:698
 msgid "Choose how often the table is synchronized."
 msgstr ""
 
-#: includes/class-admin.php:622
+#: includes/class-admin.php:701
 msgid "Confirm that the current content of the table may be replaced with the data from the source."
 msgstr ""
 
-#: includes/class-admin.php:643
+#: includes/class-admin.php:722
 msgid "Settings saved."
 msgstr ""
 
-#: includes/class-admin.php:665
+#: includes/class-admin.php:744
 msgid "Nothing was changed. Confirm that the changes made in TablePress may be replaced."
 msgstr ""
 
-#: includes/class-admin.php:685
+#: includes/class-admin.php:764
 msgid "The changes made in TablePress are kept, and automatic sync is turned off. \"Sync now\" will again stop at these changes until you choose to replace them."
 msgstr ""
 
-#: includes/class-admin.php:695
+#: includes/class-admin.php:774
 msgid "Nothing was removed. Confirm that the sync settings and history may be deleted."
 msgstr ""
 
-#: includes/class-admin.php:700
+#: includes/class-admin.php:779
 msgid "The sync setup was removed. The TablePress table and its data were not changed."
 msgstr ""
 
-#: includes/class-admin.php:740
+#: includes/class-admin.php:819
 msgid "Sorry, you are not allowed to manage the automatic sync of this table."
 msgstr ""
 
 #. translators: 1: table name, 2: result.
-#: includes/class-admin.php:755
+#: includes/class-admin.php:834
 #, php-format
 msgid "%1$s: %2$s"
 msgstr ""

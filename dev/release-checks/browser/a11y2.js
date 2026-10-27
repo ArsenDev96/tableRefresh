@@ -13,7 +13,7 @@ const BASE = 'http://localhost:8090';
 		await Promise.all( [ page.waitForNavigation( { waitUntil: 'networkidle2' } ), page.click( '#wp-submit' ) ] );
 	}
 	for ( const [ label, url ] of [ [ 'set up', '&action=add' ], [ 'list', '' ], [ 'settings', '&action=edit&table=7' ] ] ) {
-		await page.goto( BASE + '/wp-admin/tools.php?page=tablerefresh' + url, { waitUntil: 'networkidle2' } );
+		await page.goto( BASE + '/wp-admin/admin.php?page=tablerefresh' + url, { waitUntil: 'networkidle2' } );
 		await page.focus( '.tablerefresh a' ); // First link of the plugin's area.
 		const order = [];
 		for ( let i = 0; i < 40; i++ ) {
@@ -36,7 +36,7 @@ const BASE = 'http://localhost:8090';
 		}
 		console.log( `keyboard ${ label }: ${ order.join( ' → ' ) }` );
 	}
-	await page.goto( BASE + '/wp-admin/tools.php?page=tablerefresh&action=add', { waitUntil: 'networkidle2' } );
+	await page.goto( BASE + '/wp-admin/admin.php?page=tablerefresh&action=add', { waitUntil: 'networkidle2' } );
 	await page.addScriptTag( { path: require.resolve( 'axe-core/axe.min.js' ) } );
 	const r = await page.evaluate( async () => axe.run( { include: [ '.tablerefresh' ] }, { runOnly: { type: 'rule', values: [ 'color-contrast' ] } } ) );
 	for ( const v of r.incomplete ) {

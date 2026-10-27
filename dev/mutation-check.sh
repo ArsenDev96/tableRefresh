@@ -208,3 +208,11 @@ mutate class-table-updater.php \
 	"		unset( \$editors[ get_current_user_id() ] );" \
 	"		\$editors = array();" \
 	"test_own_editor_session_does_not_block" "editor sessions of other users ignored"
+mutate class-admin.php \
+	"		unset( \$menu_order[ \$own ] );" \
+	"		return \$menu_order;" \
+	"test_menu_position_avoids_taken_positions" "admin: menu not kept below TablePress"
+mutate class-admin.php \
+	"		add_action( 'admin_menu', array( __CLASS__, 'redirect_former_url' ), 0 );" \
+	"" \
+	"test_former_tools_url" "admin: former Tools URL not redirected"

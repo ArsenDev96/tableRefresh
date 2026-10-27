@@ -10,7 +10,8 @@ namespace TableRefresh;
 defined( 'ABSPATH' ) || exit;
 
 /**
- * Tools > TableRefresh: set up, review, and run the automatic sync of TablePress tables.
+ * TableRefresh admin menu (directly below TablePress): set up, review, and run the automatic sync
+ * of TablePress tables.
  *
  * Every change is a POST to admin-post.php with a nonce for the action and table, and requires
  * both the TableRefresh capability (default `manage_options`: a source makes the server download
@@ -20,6 +21,13 @@ defined( 'ABSPATH' ) || exit;
 final class Admin {
 
 	const PAGE = 'tablerefresh';
+
+	/**
+	 * Menu icon: a table with a header row and two sync arrows (original artwork). WordPress
+	 * recolors the fill to match the admin color scheme. Source:
+	 * <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path fill="black" d="M1 1h12v3.2H1zm0 4h3.47v3.2H1zm4.27 0h3.46v3.2H5.27zm4.26 0H13v3.2H9.53zM1 9h3.47v3.2H1zm4.27 0h3.46v3.2H5.27zm5.3 5.22a4.5 4.5 0 0 1 7.88-2.11l.76-.64-.05 2.65-2.63-.4.77-.65a3 3 0 0 0-5.25 1.41zm8.86 1.56a4.5 4.5 0 0 1-7.88 2.11l-.76.64.05-2.65 2.63.4-.77.65a3 3 0 0 0 5.25-1.41z"/></svg>
+	 */
+	const MENU_ICON = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMCAyMCI+PHBhdGggZmlsbD0iYmxhY2siIGQ9Ik0xIDFoMTJ2My4ySDF6bTAgNGgzLjQ3djMuMkgxem00LjI3IDBoMy40NnYzLjJINS4yN3ptNC4yNiAwSDEzdjMuMkg5LjUzek0xIDloMy40N3YzLjJIMXptNC4yNyAwaDMuNDZ2My4ySDUuMjd6bTUuMyA1LjIyYTQuNSA0LjUgMCAwIDEgNy44OC0yLjExbC43Ni0uNjQtLjA1IDIuNjUtMi42My0uNC43Ny0uNjVhMyAzIDAgMCAwLTUuMjUgMS40MXptOC44NiAxLjU2YTQuNSA0LjUgMCAwIDEtNy44OCAyLjExbC0uNzYuNjQuMDUtMi42NSAyLjYzLjQtLjc3LjY1YTMgMyAwIDAgMCA1LjI1LTEuNDF6Ii8+PC9zdmc+';
 
 	/**
 	 * Screen hook suffix of the page.
@@ -32,7 +40,10 @@ final class Admin {
 	 * Registers the hooks.
 	 */
 	public static function init(): void {
-		add_action( 'admin_menu', array( __CLASS__, 'add_page' ) );
+		add_action( 'admin_menu', array( __CLASS__, 'redirect_former_url' ), 0 );
+		add_action( 'admin_menu', array( __CLASS__, 'add_page' ), 11 ); // After TablePress (10).
+		add_filter( 'custom_menu_order', '__return_true' );
+		add_filter( 'menu_order', array( __CLASS__, 'menu_order' ) );
 		add_action( 'admin_notices', array( __CLASS__, 'attention_notice' ) );
 		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueue' ) );
 		add_filter( 'plugin_action_links_' . plugin_basename( TABLEREFRESH_FILE ), array( __CLASS__, 'action_links' ) );
@@ -72,7 +83,7 @@ final class Admin {
 	 * @return string
 	 */
 	public static function url( array $args = array() ): string {
-		return add_query_arg( array_merge( array( 'page' => self::PAGE ), $args ), admin_url( 'tools.php' ) );
+		return add_query_arg( array_merge( array( 'page' => self::PAGE ), $args ), admin_url( 'admin.php' ) );
 	}
 
 	/**
@@ -91,18 +102,86 @@ final class Admin {
 	}
 
 	/**
-	 * Adds Tools > TableRefresh.
+	 * Adds the top-level TableRefresh menu, directly below TablePress.
 	 */
 	public static function add_page(): void {
-		$hook = add_management_page(
+		$hook = add_menu_page(
 			__( 'TableRefresh – automatic sync for TablePress tables', 'tablerefresh' ),
 			__( 'TableRefresh', 'tablerefresh' ),
 			self::capability(),
 			self::PAGE,
-			array( __CLASS__, 'render_page' )
+			array( __CLASS__, 'render_page' ),
+			self::MENU_ICON,
+			self::menu_position()
 		);
 
 		self::$hook = is_string( $hook ) ? $hook : '';
+	}
+
+	/**
+	 * Menu position just after TablePress's top-level entry, wherever TablePress put it (top,
+	 * middle, or bottom, as set in its options). Without one (TablePress inactive, or its entry
+	 * moved under another menu), after the content menus, where TablePress goes by default.
+	 *
+	 * If that position is taken, add_menu_page() shifts it by a small fraction; menu_order() then
+	 * restores the order next to TablePress.
+	 *
+	 * @return string
+	 */
+	public static function menu_position(): string {
+		global $menu, $_wp_last_object_menu;
+		foreach ( (array) $menu as $position => $item ) {
+			if ( isset( $item[2] ) && 'tablepress' === $item[2] ) {
+				return (string) ( (float) $position + 0.1 );
+			}
+		}
+		$position = isset( $_wp_last_object_menu ) ? (int) $_wp_last_object_menu + 1 : 25;
+		while ( isset( $menu[ $position ] ) ) {
+			++$position;
+		}
+		return (string) $position;
+	}
+
+	/**
+	 * Keeps TableRefresh directly below TablePress, also when another menu took the position
+	 * after TablePress's or TablePress registered its menu later.
+	 *
+	 * @param mixed $menu_order Menu slugs in display order.
+	 * @return mixed
+	 */
+	public static function menu_order( $menu_order ) {
+		if ( ! is_array( $menu_order ) ) {
+			return $menu_order;
+		}
+		$own = array_search( self::PAGE, $menu_order, true );
+		if ( false === $own || ! in_array( 'tablepress', $menu_order, true ) ) {
+			return $menu_order;
+		}
+		unset( $menu_order[ $own ] );
+		$menu_order = array_values( $menu_order );
+		array_splice( $menu_order, (int) array_search( 'tablepress', $menu_order, true ) + 1, 0, array( self::PAGE ) );
+		return $menu_order;
+	}
+
+	/**
+	 * Sends links to the former Tools > TableRefresh page (bookmarks) to the same view of the
+	 * top-level page. Runs before WordPress checks access to the requested page.
+	 */
+	public static function redirect_former_url(): void {
+		global $pagenow;
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Navigation only.
+		if ( 'tools.php' !== $pagenow || ! isset( $_GET['page'] ) || self::PAGE !== $_GET['page'] ) {
+			return;
+		}
+		$args = array();
+		foreach ( array( 'action', 'table' ) as $key ) {
+			if ( isset( $_GET[ $key ] ) && is_string( $_GET[ $key ] ) ) {
+				$args[ $key ] = sanitize_key( wp_unslash( $_GET[ $key ] ) );
+			}
+		}
+		// phpcs:enable WordPress.Security.NonceVerification.Recommended
+		wp_safe_redirect( self::url( $args ) );
+		exit;
 	}
 
 	/**

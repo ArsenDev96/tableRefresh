@@ -1,12 +1,13 @@
 <?php
 /**
- * The Tools > TableRefresh screen and its form handlers, through Apache with real login cookies.
+ * The TableRefresh admin menu and screen and its form handlers, through Apache with real login cookies.
  *
  * Nonces are read from the rendered page, as a browser would submit them.
  *
  * @package TableRefresh
  */
 
+use TableRefresh\Admin;
 use TableRefresh\Scheduler;
 use TableRefresh\Sync_Config;
 use TableRefresh\Sync_Log;
@@ -78,7 +79,7 @@ class AdminScreenTest extends Integration_Test_Case {
 	}
 
 	private function page( string $cookie, string $query = '' ): string {
-		$response = $this->request( '/wp-admin/tools.php?page=tablerefresh' . $query, $cookie );
+		$response = $this->request( '/wp-admin/admin.php?page=tablerefresh' . $query, $cookie );
 		$this->assertSame( 200, $response['status'], substr( wp_strip_all_tags( $response['body'] ), 0, 300 ) );
 		return $response['body'];
 	}
@@ -259,7 +260,7 @@ class AdminScreenTest extends Integration_Test_Case {
 		foreach ( array( $editor_id, $admin_id ) as $user_id ) {
 			$user_cookie = $this->login_cookie( $user_id );
 			if ( $user_id === $editor_id ) {
-				$this->assertNotSame( 200, $this->request( '/wp-admin/tools.php?page=tablerefresh', $user_cookie )['status'] );
+				$this->assertNotSame( 200, $this->request( '/wp-admin/admin.php?page=tablerefresh', $user_cookie )['status'] );
 			} else {
 				$this->assertStringNotContainsString( 'name="table" value="' . $post_id . '"', $this->page( $user_cookie ), 'The table is not listed.' );
 				$this->assertStringNotContainsString( 'Prices', $this->page( $user_cookie, '&action=add' ) );
@@ -388,5 +389,157 @@ class AdminScreenTest extends Integration_Test_Case {
 		$add = $this->page( $cookie, '&action=add' );
 		$this->assertStringNotContainsString( '<script>alert(1)</script>', $add );
 		$this->assertStringContainsString( '&lt;script&gt;alert(1)&lt;/script&gt; (ID ' . $table_id . ')', $add );
+	}
+
+	/**
+	 * Top-level entries of the admin menu on the Dashboard, in display order.
+	 *
+	 * @param string $cookie Cookie header.
+	 * @return array{0: string[], 1: string} Entry IDs and the menu's HTML.
+	 */
+	private function admin_menu( string $cookie ): array {
+		$response = $this->request( '/wp-admin/index.php', $cookie );
+		$this->assertSame( 200, $response['status'] );
+		$start = strpos( $response['body'], '<ul id="adminmenu">' );
+		$this->assertIsInt( $start, 'No admin menu.' );
+		$html = substr( $response['body'], $start, (int) strpos( $response['body'], '<div id="wpcontent">' ) - $start );
+		preg_match_all( '#<li class="[^"]*\bmenu-top\b[^"]*" id="([^"]+)"#', $html, $ids );
+		return array( $ids[1], $html );
+	}
+
+	/**
+	 * Sets TablePress's "Admin menu entry" option of a user, as its Plugin Options screen does.
+	 *
+	 * @param int    $user_id User ID.
+	 * @param string $parent  "top", "middle", "bottom", or a parent menu file such as "tools.php".
+	 */
+	private function set_tablepress_menu( int $user_id, string $parent ): void {
+		$options = array(
+			'user_options_db_version' => TablePress::db_version,
+			'admin_menu_parent_page'  => $parent,
+		);
+		update_user_option( $user_id, 'tablepress_user_options', wp_json_encode( $options ), false );
+	}
+
+	public function test_top_level_menu_directly_below_tablepress() {
+		require_once TABLEREFRESH_DIR . 'includes/class-admin.php';
+		$admin_id = $this->user( 'administrator' );
+		$cookie   = $this->login_cookie( $admin_id );
+		$expected = array(
+			'middle' => 'menu-comments',
+			'top'    => 'menu-dashboard',
+			'bottom' => 'menu-settings',
+		);
+
+		// TablePress's own (per-user) setting puts its menu at the top, in the middle, or at the bottom.
+		foreach ( $expected as $position => $before_tablepress ) {
+			$this->set_tablepress_menu( $admin_id, $position );
+			list( $ids, $html ) = $this->admin_menu( $cookie );
+			$tablepress         = array_search( 'toplevel_page_tablepress', $ids, true );
+			$this->assertIsInt( $tablepress, "TablePress {$position}" );
+			$this->assertSame( $before_tablepress, $ids[ $tablepress - 1 ] ?? null, "TablePress {$position}" );
+			$this->assertSame( 'toplevel_page_tablerefresh', $ids[ $tablepress + 1 ] ?? null, "TablePress {$position}" );
+			$this->assertSame( 1, substr_count( $html, 'page=tablerefresh' ), 'Exactly one entry, none under Tools.' );
+			$this->assertStringContainsString( substr( Admin::MENU_ICON, strlen( 'data:image/svg+xml;base64,' ) ), $html );
+		}
+
+		// TablePress under another menu: TableRefresh stays top-level, after the content menus.
+		$this->set_tablepress_menu( $admin_id, 'tools.php' );
+		list( $ids, $html ) = $this->admin_menu( $cookie );
+		$this->assertNotContains( 'toplevel_page_tablepress', $ids );
+		$this->assertStringContainsString( 'tools.php?page=tablepress', $html );
+		$own = array_search( 'toplevel_page_tablerefresh', $ids, true );
+		$this->assertIsInt( $own );
+		$this->assertGreaterThan( array_search( 'menu-comments', $ids, true ), $own );
+		$this->assertLessThan( array_search( 'menu-appearance', $ids, true ), $own );
+		$this->assertSame( 1, substr_count( $html, 'page=tablerefresh' ) );
+
+		// Editors use TablePress but not TableRefresh (capability unchanged).
+		list( $ids ) = $this->admin_menu( $this->login_cookie( $this->user( 'editor' ) ) );
+		$this->assertContains( 'toplevel_page_tablepress', $ids );
+		$this->assertNotContains( 'toplevel_page_tablerefresh', $ids );
+	}
+
+	public function test_menu_without_active_tablepress() {
+		$cookie = $this->login_cookie();
+		$active = (array) get_option( 'active_plugins' );
+		$this->assertContains( 'tablepress/tablepress.php', $active );
+		update_option( 'active_plugins', array_values( array_diff( $active, array( 'tablepress/tablepress.php' ) ) ) );
+		try {
+			list( $ids ) = $this->admin_menu( $cookie );
+			$this->assertNotContains( 'toplevel_page_tablepress', $ids );
+			$this->assertContains( 'toplevel_page_tablerefresh', $ids );
+			$this->assertStringContainsString( 'requires the free TablePress plugin', $this->page( $cookie ) );
+		} finally {
+			update_option( 'active_plugins', $active );
+		}
+	}
+
+	/**
+	 * Display order as wp-admin/menu.php computes it: natural order of the positions, then the
+	 * menu_order filter.
+	 *
+	 * @param array<string, array<int, string>> $menu Menu.
+	 * @return string[] Slugs.
+	 */
+	private function displayed_order( array $menu ): array {
+		uksort( $menu, 'strnatcasecmp' );
+		return Admin::menu_order( array_column( $menu, 2 ) );
+	}
+
+	public function test_menu_position_avoids_taken_positions() {
+		require_once ABSPATH . 'wp-admin/includes/plugin.php';
+		require_once TABLEREFRESH_DIR . 'includes/class-admin.php';
+		global $menu, $admin_page_hooks, $_registered_pages, $_wp_last_object_menu;
+		$saved     = array( $menu, $admin_page_hooks, $_registered_pages, $_wp_last_object_menu );
+		$dashboard = array( 'Dashboard', 'read', 'index.php' );
+		$comments  = array( 'Comments', 'edit_posts', 'edit-comments.php' );
+		try {
+			// The position alone already follows TablePress (also if another plugin's menu_order
+			// filter changes the order afterwards).
+			$menu = array(
+				'2'  => $dashboard,
+				'3'  => array( 'TablePress', 'read', 'tablepress' ),
+				'25' => $comments,
+			);
+			Admin::add_page();
+			uksort( $menu, 'strnatcasecmp' );
+			$this->assertSame( array( 'index.php', 'tablepress', 'tablerefresh', 'edit-comments.php' ), array_column( $menu, 2 ) );
+
+			// Another plugin already uses the position right after TablePress.
+			$menu = array(
+				'2'    => $dashboard,
+				'25'   => $comments,
+				'26'   => array( 'TablePress', 'read', 'tablepress' ),
+				'26.1' => array( 'Other', 'read', 'other' ),
+				'27'   => array( 'Next', 'read', 'next' ),
+			);
+			Admin::add_page();
+			$this->assertCount( 6, $menu, 'No entry was replaced.' );
+			$this->assertSame( array( 'index.php', 'edit-comments.php', 'tablepress', 'tablerefresh', 'other', 'next' ), $this->displayed_order( $menu ) );
+
+			// No TablePress entry: the first free position after the content menus.
+			$menu                 = array(
+				'2'  => $dashboard,
+				'25' => $comments,
+				'26' => array( 'Other', 'read', 'other' ),
+				'60' => array( 'Appearance', 'switch_themes', 'themes.php' ),
+			);
+			$_wp_last_object_menu = 25;
+			Admin::add_page();
+			$this->assertSame( 'tablerefresh', $menu['27'][2] ?? null );
+			$this->assertSame( array( 'index.php', 'edit-comments.php', 'other', 'tablerefresh', 'themes.php' ), $this->displayed_order( $menu ) );
+		} finally {
+			list( $menu, $admin_page_hooks, $_registered_pages, $_wp_last_object_menu ) = $saved;
+		}
+	}
+
+	public function test_former_tools_url_leads_to_the_same_view() {
+		$cookie   = $this->login_cookie();
+		$response = $this->request( '/wp-admin/tools.php?page=tablerefresh&action=edit&table=12', $cookie );
+		$this->assertSame( 302, $response['status'] );
+		$this->assertSame( admin_url( 'admin.php?page=tablerefresh&action=edit&table=12' ), $response['location'] );
+		$this->assertSame( admin_url( 'admin.php?page=tablerefresh' ), $this->request( '/wp-admin/tools.php?page=tablerefresh', $cookie )['location'] );
+		$this->assertSame( 200, $this->request( '/wp-admin/tools.php', $cookie )['status'], 'The Tools screen itself is unaffected.' );
 	}
 }

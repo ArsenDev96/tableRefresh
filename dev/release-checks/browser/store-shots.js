@@ -45,7 +45,7 @@ const sleep = ( ms ) => new Promise( ( r ) => setTimeout( r, ms ) );
 			throw new Error( `${ step }: "${ needle }" not found` );
 		}
 	};
-	const trPage = '/wp-admin/tools.php?page=tablerefresh';
+	const trPage = '/wp-admin/admin.php?page=tablerefresh';
 
 	await go( '/wp-login.php' );
 	if ( await page.$( '#user_login' ) ) {

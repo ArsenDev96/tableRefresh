@@ -31,7 +31,7 @@ const sleep = ( ms ) => new Promise( ( r ) => setTimeout( r, ms ) );
 	const shot = async ( name ) => page.screenshot( { path: path.join( OUT, name + '.png' ), fullPage: true } );
 	const text = async () => page.$eval( '#wpbody-content', ( e ) => e.innerText );
 	const submitAndWait = async ( selector ) => Promise.all( [ page.waitForNavigation( { waitUntil: 'networkidle2', timeout: 90000 } ), page.click( selector ) ] );
-	const trPage = '/wp-admin/tools.php?page=tablerefresh';
+	const trPage = '/wp-admin/admin.php?page=tablerefresh';
 
 	// Log in.
 	await go( '/wp-login.php' );
@@ -49,7 +49,10 @@ const sleep = ( ms ) => new Promise( ( r ) => setTimeout( r, ms ) );
 	check( ( await text() ).includes( 'Plugin installed successfully' ), 'install from ZIP upload' );
 	await Promise.all( [ page.waitForNavigation( { waitUntil: 'networkidle2' } ), page.click( 'a.button-primary[href*="action=activate"]' ) ] );
 	check( ( await text() ).includes( 'Plugin activated' ), 'activate' );
-	check( await page.$( 'a[href*="tools.php?page=tablerefresh"]' ) !== null, 'plugin row "Set up" link' );
+	check( await page.$( 'a[href*="admin.php?page=tablerefresh"]' ) !== null, 'plugin row "Set up" link' );
+	const menuIds = await page.$$eval( '#adminmenu > li.menu-top', ( items ) => items.map( ( li ) => li.id ) );
+	check( menuIds[ menuIds.indexOf( 'toplevel_page_tablepress' ) + 1 ] === 'toplevel_page_tablerefresh', 'menu entry directly below TablePress' );
+	check( await page.$( '#menu-tools a[href*="page=tablerefresh"]' ) === null, 'no entry under Tools' );
 
 	// 2. Create a table in TablePress, and change one of its options in the TablePress editor.
 	await go( '/wp-admin/admin.php?page=tablepress_add' );

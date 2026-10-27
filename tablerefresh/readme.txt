@@ -18,7 +18,7 @@ TableRefresh is an independent add-on for the free [TablePress](https://wordpres
 
 = Features =
 
-* Set up under Tools > TableRefresh: choose a table, paste a CSV or Google Sheets link, choose hourly, daily, or weekly.
+* Set up in the TableRefresh menu, right below TablePress: choose a table, paste a CSV or Google Sheets link, choose hourly, daily, or weekly.
 * "Sync now" updates a table immediately.
 * Each table shows its last result, its last successful sync, and the 10 most recent attempts in plain language.
 * Google Sheets sharing links work as they are; TableRefresh finds the CSV export address itself.
@@ -44,7 +44,7 @@ TableRefresh downloads the data source that you enter: a CSV file at the address
 1. Install and activate TablePress, if it is not active yet.
 2. Install TableRefresh from Plugins > Add New (search for "TableRefresh"), or upload the ZIP file under Plugins > Add New > Upload Plugin, and activate it.
 3. In TablePress, create the table that should show the data, or use an existing table.
-4. Go to Tools > TableRefresh and click "Set up a table".
+4. Click TableRefresh in the admin menu (right below TablePress) and click "Set up a table".
 5. Select the table, paste the link to your CSV file or Google Sheet, choose how often to sync, confirm that the current content of the table may be replaced, and click "Save and sync now".
 
 For a Google Sheet: in Google Sheets, click Share, set General access to "Anyone with the link", click "Copy link", and paste that link.
@@ -69,7 +69,7 @@ Automatic syncs use WordPress's scheduled tasks (WP-Cron). They run when someone
 
 = What happens if someone edits a synchronized table in TablePress? =
 
-The next sync does not overwrite the edit. It stops, and automatic sync pauses. Under Tools > TableRefresh you then choose: keep the changes (automatic sync is turned off) or replace them with the data from the source. In the other direction, if someone opened a table in the TablePress editor before a sync and saves it afterwards, TablePress shows an error and nothing is saved, so the older copy cannot overwrite the synchronized data.
+The next sync does not overwrite the edit. It stops, and automatic sync pauses. In the TableRefresh menu you then choose: keep the changes (automatic sync is turned off) or replace them with the data from the source. In the other direction, if someone opened a table in the TablePress editor before a sync and saves it afterwards, TablePress shows an error and nothing is saved, so the older copy cannot overwrite the synchronized data.
 
 = What happens when a sync fails? =
 
@@ -125,7 +125,7 @@ Deactivating TableRefresh stops all automatic syncs and keeps the settings; acti
 
 = 1.0.0 =
 * First public release.
-* Tools > TableRefresh: set up tables, Sync now, history, and decisions after edits in TablePress.
+* TableRefresh admin menu, right below TablePress: set up tables, Sync now, history, and decisions after edits in TablePress.
 * Automatic sync with WordPress scheduled tasks: hourly, daily, or weekly.
 * CSV files and public Google Sheets; atomic updates with recovery of interrupted updates.
 
