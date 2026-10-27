@@ -12,6 +12,8 @@ Scripts used to verify a release candidate. They are not part of the plugin ZIP.
     public Google sample sheet.
   - `a11y.js`, `a11y2.js`: axe, keyboard order and visible focus, RTL, on the same site.
   - `shots.js`: screenshots of the dev site (http://localhost:8089).
+  - `store-shots.js <dir>`: the WordPress.org screenshots, on a fresh site with TablePress and the
+    plugin active and no tables (default http://localhost:8090; `TR_BASE` and `TR_WP` select another).
   - `assets.js`: renders `release/wordpress-org-assets/` icons and banners.
   - Chrome and Git Bash are expected at `C:/Program Files/Google/Chrome/...` and
     `C:/Program Files/Git/bin/bash.exe`; the repository path is derived from the script location.
