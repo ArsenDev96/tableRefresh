@@ -339,6 +339,58 @@ class ScheduledSyncTest extends Integration_Test_Case {
 		$this->assertEachSyncedOnce( $tables );
 	}
 
+	/**
+	 * The runner that finds the table locked by another runner still leaves exactly one event.
+	 *
+	 * Two runners that reschedule the same event at the same moment write the same cron array. The
+	 * second write changes no row, so update_option() keeps that runner's older cached copy, and its
+	 * next write (removing the old event) drops the table's event, or keeps the old one as well.
+	 * Every other outcome of a run repairs the event; "busy" must too.
+	 */
+	public function test_runner_that_finds_the_table_busy_keeps_exactly_one_event() {
+		list( $table_id, $post_id ) = $this->configured_table( $this->fixture( 's.csv', self::V1 ), 'hourly' );
+		$revisions                  = $this->revision_count( $table_id );
+		$log                        = Sync_Log::get( $post_id );
+		$lock                       = Table_Lock::acquire( $table_id ); // The other runner is syncing.
+		$this->assertInstanceOf( Table_Lock::class, $lock );
+		try {
+			foreach ( array( 'event lost' => 0, 'old event kept' => 2 ) as $case => $events ) {
+				wp_clear_scheduled_hook( Scheduler::HOOK, array( $post_id ) );
+				for ( $i = 0; $i < $events; $i++ ) {
+					wp_schedule_event( time() + 60 + $i * 600, 'hourly', Scheduler::HOOK, array( $post_id ) );
+				}
+				$this->assertSame( $events, Scheduler::count_events( $post_id ) );
+				$this->run_scheduled( $post_id );
+				$this->assertSame( 1, Scheduler::count_events( $post_id ), $case );
+				$this->assertGreaterThan( time(), Scheduler::next_run( $post_id ), $case );
+			}
+		} finally {
+			$lock->release();
+		}
+		$this->assertSame( $revisions, $this->revision_count( $table_id ), 'No sync ran.' );
+		$this->assertSame( $log, Sync_Log::get( $post_id ), 'A busy run is not recorded.' );
+	}
+
+	public function test_busy_runner_schedules_nothing_for_disabled_paused_or_removed_tables() {
+		$url = $this->fixture( 's.csv', self::V1 );
+		foreach ( array( 'disabled', 'paused', 'removed' ) as $case ) {
+			list( $table_id, $post_id ) = $this->configured_table( $url, 'hourly' );
+			$config                     = Sync_Config::get( $post_id );
+			if ( 'disabled' === $case ) {
+				Sync_Config::save( $post_id, array( 'enabled' => false ) + $config );
+			} elseif ( 'paused' === $case ) {
+				Sync_Config::save( $post_id, array( 'attention' => Sync_Config::ATTENTION_CONFLICT ) + $config );
+			} else {
+				Sync_Config::delete( $post_id );
+			}
+			$this->assertSame( 1, Scheduler::count_events( $post_id ), "{$case}: the stale event is still there" );
+			$lock = Table_Lock::acquire( $table_id );
+			$this->run_scheduled( $post_id );
+			$lock->release();
+			$this->assertSame( 0, Scheduler::count_events( $post_id ), $case );
+		}
+	}
+
 	public function test_many_due_tables_through_wp_cron_php() {
 		$tables = $this->overdue_tables( 10 );
 		delete_transient( 'doing_cron' ); // Earlier page loads may have left WP-Cron's lock of a spawn that could not connect.

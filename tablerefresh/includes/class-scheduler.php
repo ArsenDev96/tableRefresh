@@ -37,7 +37,17 @@ final class Scheduler {
 	 * @param int $post_id Table post ID.
 	 */
 	public static function run( $post_id ): void {
-		( new Sync_Runner() )->run( (int) $post_id, 'scheduled' );
+		$post_id = (int) $post_id;
+		$result  = ( new Sync_Runner() )->run( $post_id, 'scheduled' );
+
+		// Every other outcome already applied the configuration. When two cron runners reschedule
+		// the same event at the same moment, the second identical write changes no row, so
+		// update_option() keeps that runner's older copy of the cron array, and the runner's next
+		// write drops this event (or keeps the old one as well). The runner that finds the table
+		// busy may be that runner: make its copy hold exactly one event again.
+		if ( 'busy' === $result['outcome'] ) {
+			self::apply( $post_id, Sync_Config::get( $post_id ) );
+		}
 	}
 
 	/**

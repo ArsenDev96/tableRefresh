@@ -216,3 +216,7 @@ mutate class-admin.php \
 	"		add_action( 'admin_menu', array( __CLASS__, 'redirect_former_url' ), 0 );" \
 	"" \
 	"test_former_tools_url" "admin: former Tools URL not redirected"
+mutate class-scheduler.php \
+	"		if ( 'busy' === \$result['outcome'] ) {" \
+	"		if ( false ) {" \
+	"test_runner_that_finds_the_table_busy" "scheduler: busy runner leaves a lost event lost"
