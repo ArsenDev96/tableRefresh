@@ -121,6 +121,34 @@ class ConcurrencyTest extends Integration_Test_Case {
 		$this->assertTrue( $fourth->release() );
 	}
 
+	public function test_lock_check_in_a_transaction_blocks_a_takeover_until_the_commit() {
+		global $wpdb;
+		$table_id = 'lock-row-' . wp_generate_password( 6, false );
+		$name     = Table_Lock::option_name( $table_id );
+		$lock     = Table_Lock::acquire( $table_id );
+		$this->assertInstanceOf( Table_Lock::class, $lock );
+
+		// Another process that tries to take the lock over, on its own connection.
+		$other = new wpdb( DB_USER, DB_PASSWORD, DB_NAME, DB_HOST );
+		$other->suppress_errors( true );
+		$other->query( 'SET SESSION innodb_lock_wait_timeout = 1' );
+		$takeover = $other->prepare( "UPDATE {$wpdb->options} SET option_value = 'other' WHERE option_name = %s", $name );
+
+		$wpdb->query( 'START TRANSACTION' );
+		try {
+			$this->assertTrue( $lock->is_held( true ) );
+			$this->assertFalse( $other->query( $takeover ), 'The lock row must stay locked until the commit.' );
+			$this->assertStringContainsString( 'Lock wait timeout', $other->last_error );
+		} finally {
+			$wpdb->query( 'COMMIT' );
+		}
+
+		$this->assertSame( 1, $other->query( $takeover ), 'After the commit the row is free again.' );
+		$this->assertFalse( $lock->is_held() );
+		$other->close();
+		$wpdb->delete( $wpdb->options, array( 'option_name' => $name ) );
+	}
+
 	/**
 	 * Polls a condition every 20 ms until it holds or one of the processes has exited.
 	 *

@@ -193,12 +193,13 @@ abstract class Integration_Test_Case extends TestCase {
 	/**
 	 * Starts `wp tablerefresh sync` as a separate PHP process.
 	 *
-	 * @param string[]              $args Command arguments after "wp tablerefresh".
+	 * @param string[]              $args Command arguments after "wp tablerefresh" (--format=json unless a format is given).
 	 * @param array<string, string> $env  Extra environment variables.
 	 * @return array{0: resource, 1: array<int, resource>}
 	 */
 	protected function start_cli( array $args, array $env = array() ): array {
-		$command = array_merge( array( 'wp', '--path=' . TABLEREFRESH_TESTS_WP_DIR, 'tablerefresh' ), $args, array( '--format=json' ) );
+		$format  = preg_grep( '/^--format=/', $args ) ? array() : array( '--format=json' );
+		$command = array_merge( array( 'wp', '--path=' . TABLEREFRESH_TESTS_WP_DIR, 'tablerefresh' ), $args, $format );
 		$process = proc_open( $command, array( 1 => array( 'pipe', 'w' ), 2 => array( 'pipe', 'w' ) ), $pipes, null, array_merge( getenv(), $env ) );
 		$this->assertIsResource( $process );
 		return array( $process, $pipes );

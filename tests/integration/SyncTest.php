@@ -116,6 +116,26 @@ class SyncTest extends Integration_Test_Case {
 		);
 	}
 
+	public function test_cli_text_output() {
+		$table_id = $this->create_table( self::ORIGINAL );
+		$url      = $this->fixture( 'cli.csv', "x,y\n1,2\n" );
+
+		$run = $this->run_cli( array( 'sync', $table_id, $url, '--format=text' ) );
+		$this->assertSame( 0, $run['exit'], $run['stdout'] . $run['stderr'] );
+		$lines = explode( "\n", trim( $run['stdout'] ) );
+		$this->assertContains( 'status: "updated"', $lines, $run['stdout'] );
+		$this->assertContains( 'table_id: "' . $table_id . '"', $lines, $run['stdout'] );
+		$this->assertContains( 'rows: 2', $lines, $run['stdout'] );
+		$this->assertContains( 'atomic: true', $lines, $run['stdout'] );
+		$this->assertContains( 'source_url: "' . $url . '"', $lines, $run['stdout'] );
+		$this->assertSame( 'Success: Done.', end( $lines ), $run['stdout'] );
+		$this->assertSame( array( array( 'x', 'y' ), array( '1', '2' ) ), $this->load_table( $table_id )['data'] );
+
+		$run = $this->run_cli( array( 'sync', '999999', $url, '--format=text' ) );
+		$this->assertSame( 1, $run['exit'], $run['stdout'] . $run['stderr'] );
+		$this->assertStringContainsString( '[tablerefresh_table_not_found]', $run['stderr'] );
+	}
+
 	public function test_missing_table_is_not_created() {
 		$count  = TablePress::$model_table->count_tables();
 		$result = $this->sync( '999999', $this->static_url( 'simple.csv' ) );

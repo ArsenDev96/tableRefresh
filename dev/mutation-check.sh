@@ -220,3 +220,11 @@ mutate class-scheduler.php \
 	"		if ( 'busy' === \$result['outcome'] ) {" \
 	"		if ( false ) {" \
 	"test_runner_that_finds_the_table_busy" "scheduler: busy runner leaves a lost event lost"
+mutate class-table-lock.php \
+	"WHERE option_name = %s FOR UPDATE\", \$name )" \
+	"WHERE option_name = %s\", \$name )" \
+	"test_lock_check_in_a_transaction_blocks_a_takeover" "lock check inside the transaction does not lock the row"
+mutate class-cli-command.php \
+	"(string) wp_json_encode( \$value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE )" \
+	"(string) print_r( \$value, true )" \
+	"test_cli_text_output" "cli: text output values not JSON-encoded"

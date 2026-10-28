@@ -185,9 +185,13 @@ final class Table_Lock {
 	 */
 	private static function read( string $name, bool $for_update = false ): ?string {
 		global $wpdb;
-		$sql = $wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", $name ) . ( $for_update ? ' FOR UPDATE' : '' );
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.NotPrepared -- Prepared above.
-		$value = $wpdb->get_var( $sql );
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Must bypass caches to see what is really stored.
+		if ( $for_update ) {
+			$value = $wpdb->get_var( $wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s FOR UPDATE", $name ) );
+		} else {
+			$value = $wpdb->get_var( $wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", $name ) );
+		}
+		// phpcs:enable
 		return null === $value ? null : (string) $value;
 	}
 }

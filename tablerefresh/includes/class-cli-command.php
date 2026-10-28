@@ -164,7 +164,7 @@ final class CLI_Command {
 			WP_CLI::error( $result->get_error_message() . ' [' . $result->get_error_code() . ']' );
 		}
 		foreach ( $result as $key => $value ) {
-			WP_CLI::line( sprintf( '%s: %s', $key, is_scalar( $value ) ? var_export( $value, true ) : wp_json_encode( $value ) ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_var_export
+			WP_CLI::line( sprintf( '%s: %s', $key, (string) wp_json_encode( $value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) ) );
 		}
 		WP_CLI::success( 'Done.' );
 	}

@@ -72,7 +72,7 @@ final class Table_Updater {
 	private static ?bool $cache_addition_was_suspended = null;
 
 	/**
-	 * Whether a guarded TablePress write is in progress (used by tests for fault injection).
+	 * Whether a guarded TablePress write is in progress.
 	 *
 	 * @return bool
 	 */
@@ -536,7 +536,7 @@ final class Table_Updater {
 			return false;
 		}
 		if ( ! isset( $journal['target']['state'] ) ) {
-			return true; // Journal format 1 (no fingerprint): restore, as before.
+			return true; // Journal format 1 (no fingerprint): restore.
 		}
 		if ( ! isset( $current[ Sync_State::META_KEY ] ) || $current[ Sync_State::META_KEY ] !== $journal['target']['state'] ) {
 			return false;

@@ -110,7 +110,7 @@ Deactivating TableRefresh stops all automatic syncs and keeps the settings; acti
 * All automatic syncs that are due run one after another in one scheduled-task request. If the server ends that request early, the remaining syncs run with the next scheduled tasks; a sync that was cut off is undone and runs again at its next scheduled time.
 * A sync lock expires after 5 minutes (filter `tablerefresh_lock_ttl`); a sync that would take longer is stopped before it writes.
 * Only the TablePress editor's own "Save Changes" is checked against newer synchronized data. Other ways of writing to a table (for example a TablePress import into an existing table) can overwrite a sync; the next sync then reports the change instead of overwriting it.
-* TableRefresh relies on parts of TablePress that are not an official programming interface. It is tested with the free TablePress 3.0 to 3.4.1; TablePress Pro and Max are not tested.
+* TableRefresh relies on parts of TablePress that are not an official programming interface. This release is tested with the free TablePress 3.0 and 3.4.1; every release from 3.0 to 3.4.1 was tested during earlier development. TablePress Pro and Max are not tested.
 * Database drop-ins that spread queries over several database connections (for example HyperDB or LudicrousDB) are not tested; such setups may fail to sync, but never keep a partial update.
 
 == Screenshots ==
