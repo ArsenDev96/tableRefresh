@@ -66,3 +66,16 @@ plugins are outside TableRefresh's control. The list screen's reconcile remains 
 Only the traced cause (identical simultaneous writes) was reproduced; other overlapping-writer
 orderings were not observed in 180 runs after the fix. Not run: browser workflow on RC4 (no admin change since the
 38/38 run), matrices, MyISAM and live-Google groups.
+
+== 2026-10-28, submission-readiness: minimum WordPress version smoke check (RC4 ZIP, a006c4f)
+No earlier record covered "Requires at least: 6.7" (all RC runs used WordPress 7.1.3). Throwaway site
+(rc-env.sh up 6.7.10 under COMPOSE_PROJECT_NAME=tablerefresh-shots, removed afterwards; owner's RC site
+untouched): WordPress 6.7.10 (newest 6.7.x), web server PHP 8.4, TablePress 3.4.1 (which itself requires
+WordPress 6.7), RC4 installed and activated with WP-CLI.
+Setup sync from the public Google sample sheet: updated, 31 rows, one event; scheduled run: unchanged,
+one event. Dashboard menu: ... Comments > TablePress > TableRefresh > Appearance ...; menu icon present;
+list, settings and history, setup screens and Plugins screen HTTP 200; former Tools URL -> 302 to the
+new page. With WP_DEBUG and WP_DEBUG_LOG on: debug.log empty after these screens and a scheduled run.
+Plugin Check 2.1.0, --include-experimental: "Checks complete. No errors found."
+WordPress.org (2026-10-28): latest WordPress 7.1.3 (= Tested up to 7.1); slugs "tablerefresh" and
+"tablerefresh-auto-sync-for-tablepress" not in use.
