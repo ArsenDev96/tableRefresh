@@ -1,4 +1,4 @@
-# Handoff – 2026-10-27 (home computer, after RC2)
+# Handoff – 2026-10-28 (home computer, after RC5)
 
 ## Where things stand
 
@@ -68,9 +68,20 @@
   SHA-256 `77fae5276f3a99af580f55a2dc3ff57fe7a47c3bb421e15cb97482e314061c77`; differs from RC3 only in
   `class-scheduler.php`. Checks: `dev/release-checks/rc4-results/focused-verification.txt`.
 
+## RC5 (2026-10-28)
+
+- Fixes from the WordPress.org compliance audit of RC4, approved by the owner: literal prepared lock queries
+  (no NotPrepared suppression), WP-CLI text output via `wp_json_encode()` instead of `var_export()`, two comments
+  reworded, readme separates TablePress versions tested on this release (3.0, 3.4.1) from earlier development,
+  `Author: Arsen Manukyan`. No behavior change except the CLI text formatting.
+- RC5 = `209225e` (not tagged). ZIP: `sh dev/build-zip.sh 209225e rc5`, 25 files,
+  SHA-256 `4bd69e135265efa5a9e197091a26378652052d837a213864a3e833e6611a3fad`. Checks:
+  `dev/release-checks/rc5-results/focused-verification.txt`.
+- At submission: WordPress.org derives the slug from the name; request `tablerefresh` (text domain) before approval.
+
 ## Remaining
 
-1. Owner review of RC4; WordPress.org submission only with explicit approval.
+1. Owner review of RC5; WordPress.org submission only with explicit approval.
 2. Optional: deferred matrices (TablePress 3.1–3.4, MySQL 8.x); screen-reader pass.
 
 ## Tools

@@ -1,0 +1,59 @@
+== 2026-10-28, focused verification of v1.0.0 RC5 (209225e), home machine (Windows 11, Docker 20.10.22)
+Strategy (owner's decision): fixes from the WordPress.org compliance audit of RC4; focused checks, no matrices.
+WordPress 7.1.3, TablePress 3.4.1, MariaDB 10.11.19, WP-CLI 2.12.0 on PHP 8.3.36 and 2.7.1 on PHP 7.4.33.
+
+-- changes since RC4 (a006c4f), approved by the owner (R1, R2, O1, O2, O3 of the audit)
+R1 class-table-lock.php read(): two literal prepared queries (with / without FOR UPDATE) instead of
+   appending " FOR UPDATE" to a prepared string; the NotPrepared suppression is removed. Same queries.
+R2 class-cli-command.php: text output prints each value with wp_json_encode() (unescaped slashes and
+   Unicode) instead of var_export(); strings now appear as "x" instead of 'x'. JSON output unchanged.
+O1 class-table-updater.php: two comments reworded (no "used by tests", no "as before").
+O2 readme.txt: "This release is tested with the free TablePress 3.0 and 3.4.1; every release from 3.0
+   to 3.4.1 was tested during earlier development."
+O3 tablerefresh.php: Author: Arsen Manukyan (Contributors: arsenmanukyan unchanged). POT regenerated
+   with wp i18n make-pot; only the copyright line and the author msgid changed.
+No sync, scheduling or admin behavior changed.
+
+-- new tests
+SyncTest::test_cli_text_output: text format of a successful sync (status, table_id, rows, atomic,
+   source_url with unescaped slashes, "Success: Done.") and of an error (exit 1, error code). Fails on
+   RC4: "Failed asserting that an array contains 'status: "updated"'". Test helper: start_cli() adds
+   --format=json only when no format is given.
+ConcurrencyTest::test_lock_check_in_a_transaction_blocks_a_takeover_until_the_commit: inside a
+   transaction, is_held( true ) locks the lock row; a second connection's takeover UPDATE fails with
+   "Lock wait timeout" (innodb_lock_wait_timeout 1) and succeeds after the COMMIT. Passes on RC4 and RC5
+   lock code (behavior preserved).
+dev/mutation-check.sh, new mutations (appended):
+   caught    lock check inside the transaction does not lock the row -> Tests: 1, Assertions: 3, Failures: 1.
+   caught    cli: text output values not JSON-encoded -> Tests: 1, Assertions: 4, Failures: 1.
+
+-- results
+Full suite, PHP 8.3 + Redis: OK (245 tests, 2194 assertions)   (before the lock test was added)
+Full suite, PHP 7.4 + Redis: OK (245 tests, 2194 assertions)   (before the lock test was added)
+ScheduledSync, Concurrency, Recovery, TransactionLoss, EditorConflict, Sync tests, no Redis:
+   PHP 8.3 OK (84 tests, 1345 assertions); PHP 7.4 OK (84 tests, 1345 assertions)
+Engine group (MyISAM, non-atomic path), no Redis: PHP 8.3 OK (3 tests, 23 assertions); PHP 7.4 OK (same)
+ConcurrencyTest with the lock test, + Redis: PHP 8.3 OK (5 tests, 53 assertions); PHP 7.4 OK (same)
+TablePress 3.0 spot check (dev/test-matrix.sh tablepress 3.0, fresh project, commit 209225e):
+   Tests: 246, Assertions: 2169, Skipped: 4 (PersistentCacheTest, no Redis), no failures;
+   engine group OK (3 tests, 23 assertions).
+PHPCS (WPCS 3.1 + PHPCompatibilityWP, testVersion 7.4-): no findings.
+
+-- RC identity
+dist/tablerefresh-1.0.0-rc5.zip = sh dev/build-zip.sh 209225e rc5, 25 files, 76,123 bytes,
+SHA-256 4bd69e135265efa5a9e197091a26378652052d837a213864a3e833e6611a3fad (two builds identical,
+Git for Windows 2.46.2). One top-level folder tablerefresh/; every file byte-identical to its blob in
+209225e (.gitattributes and .phpcs.xml.dist excluded); no CR bytes; no test, debug or trace code; no
+AI-tool, TODO or debug-function references. Differs from RC4 in exactly: class-cli-command.php,
+class-table-lock.php, class-table-updater.php, tablerefresh.pot, readme.txt, tablerefresh.php.
+
+-- installed ZIP (throwaway site, COMPOSE_PROJECT_NAME=tablerefresh-shots, removed afterwards;
+   owner's RC site untouched, stopped, volumes kept)
+Plugin Check 2.1.0, --include-experimental: "Checks complete. No errors found."
+WP-CLI with the public Google sample sheet: text sync -> status: "updated", rows: 31, URLs printed
+unescaped, "Success: Done.", exit 0; repeat -> status: "unchanged"; --format=json unchanged from RC4;
+missing table -> "Error: ... [tablerefresh_table_not_found]"; recover -> status: "none", Success.
+
+-- not run
+Matrices, browser workflow (no admin change since RC3), live-Google PHPUnit group, other TablePress
+versions on RC5.

@@ -91,3 +91,5 @@ TablePress 3.0.3 [server: 10.11.19-MariaDB-ubu2204, TablePress 3.0.3]: suite: Te
 (Stopped during TablePress 3.0.4 at 18:21 UTC: the full matrix was postponed to release stabilization. 3.0.4: suite exited 0, counts not captured, engine group not run. 3.1 - 3.4.1 not run on 65d09f6.)
 == 2026-10-27 06:44 UTC commit ab507be: tablepress 3.0
 TablePress 3.0 [server: 10.11.19-MariaDB-ubu2204, TablePress 3.0, WordPress 7.1.3, PHP 8.3.35]: suite: Tests: 238, Assertions: 2072, Skipped: 4. | engine group: OK (3 tests, 23 assertions)
+== 2026-10-28 17:34 UTC commit 209225e: tablepress 3.0
+TablePress 3.0 [server: 10.11.19-MariaDB-ubu2204, TablePress 3.0, WordPress 7.1.3, PHP 8.3.36]: suite: Tests: 246, Assertions: 2169, Skipped: 4. | engine group: OK (3 tests, 23 assertions)
