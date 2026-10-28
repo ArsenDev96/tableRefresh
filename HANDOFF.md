@@ -59,13 +59,19 @@
 - Checks: `dev/release-checks/rc3-results/focused-verification.txt` (suites, PHPCS, Plugin Check, RC2 -> RC3
   upgrade with tables, settings, history and scheduled events preserved).
 
+## RC4 (2026-10-28)
+
+- Scheduling race fixed (`a006c4f`): `Scheduler::run()` re-applies the schedule after a "busy" run. Root cause:
+  identical simultaneous cron writes leave one runner with a stale copy (`update_option()` skips its cache
+  when no row changed), which dropped the table's event; only the busy path did not repair it.
+- RC4 = `a006c4f` (not tagged). ZIP: `sh dev/build-zip.sh a006c4f rc4`, 25 files,
+  SHA-256 `77fae5276f3a99af580f55a2dc3ff57fe7a47c3bb421e15cb97482e314061c77`; differs from RC3 only in
+  `class-scheduler.php`. Checks: `dev/release-checks/rc4-results/focused-verification.txt`.
+
 ## Remaining
 
-1. Owner decision on the pre-existing PHP 7.4 race in `test_many_due_tables_with_overlapping_cron_runners`
-   (a table can lose its next scheduled event when two cron runners overlap; repaired when the list screen
-   is opened): accept for 1.0.0 or fix in an RC4. See the RC3 results.
+1. Owner review of RC4; WordPress.org submission only with explicit approval.
 2. Optional: deferred matrices (TablePress 3.1–3.4, MySQL 8.x); screen-reader pass.
-3. WordPress.org submission only with the owner's explicit approval.
 
 ## Tools
 

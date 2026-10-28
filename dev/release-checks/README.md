@@ -22,6 +22,7 @@ Scripts used to verify a release candidate. They are not part of the plugin ZIP.
   `focused-verification.txt` (focused checks of 2026-10-27).
 - `rc2-results/`: focused checks of RC2 (06ddaa2), 2026-10-27.
 - `rc3-results/`: focused checks of RC3 (a50494c), 2026-10-27.
+- `rc4-results/`: scheduling fix and focused checks of RC4 (a006c4f), 2026-10-28.
 
 Coding standards and Plugin Check (no host PHP needed):
 

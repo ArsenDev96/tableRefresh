@@ -1,0 +1,68 @@
+== 2026-10-28, focused verification of v1.0.0 RC4 (a006c4f), home machine (Windows 11, Docker 20.10.22)
+Strategy (owner's decision): fix the RC3 scheduling race before 1.0.0; focused checks, no matrices.
+WordPress 7.1.3, TablePress 3.4.1, MariaDB 10.11.19, WP-CLI 2.12.0 on PHP 8.3.36 and 2.7.1 on PHP 7.4.33.
+
+-- the defect (RC3 open issue)
+test_many_due_tables_with_overlapping_cron_runners: two simultaneous `wp cron event run --due-now`
+over 25 due tables; on PHP 7.4 one table could end with no scheduled event (2 of 15, 4 of 30 runs).
+
+-- root cause (traced: temporary env-gated mu-plugin logging every write of the cron option, removed)
+Both runners reschedule the first due event at the same moment and write identical cron arrays. The
+second write changes no row, and update_option() returns before updating that process's cache
+(WordPress 7.1.3 wp-includes/option.php: `$result = $wpdb->update(...); if ( ! $result ) return false;`).
+That runner keeps its pre-reschedule copy; its wp_unschedule_event() of the old event then removes the
+table's only event from the copy, and each of its later writes persists the copy. Every sync outcome
+re-applied the schedule except "busy"; in every traced loss the same runner had also lost the table
+lock, so nothing repaired the event until the list screen ran Scheduler::reconcile(). The same stale
+copy can also keep the old event (duplicate), likewise unrepaired only on the busy path.
+WP-CLI 2.7.1 and 2.12.0 run the same reschedule/unschedule/do_action sequence; the PHP 7.4 image is
+slower, which makes the identical simultaneous write likelier.
+
+-- fix (a006c4f, tablerefresh/includes/class-scheduler.php)
+Scheduler::run() applies the configuration after a "busy" run too (Scheduler::apply(): exactly one
+future event for an enabled table, none for a disabled, paused or removed one). No sync, retry or
+history entry is added. No other plugin file changed (RC4 ZIP differs from RC3 only in this file).
+
+-- regression tests (tests/integration/ScheduledSyncTest.php)
+test_runner_that_finds_the_table_busy_keeps_exactly_one_event: table locked by "the other runner",
+this process's cron copy has no event / two events; the cron callback leaves exactly one future
+event, runs no sync (revisions unchanged) and records nothing. Fails on 8fae457:
+"event lost / Failed asserting that 0 is identical to 1."
+test_busy_runner_schedules_nothing_for_disabled_paused_or_removed_tables: stale event + lock held;
+disabled, paused (conflict) and removed configurations end with no event.
+dev/mutation-check.sh: new mutation "scheduler: busy runner leaves a lost event lost" -> caught.
+
+-- results
+Race test (overlapping runners), after the fix:
+   PHP 7.4 + Redis x60: OK      PHP 7.4, no Redis x60: OK
+   PHP 8.3 + Redis x30: OK      PHP 8.3, no Redis x30: OK
+   traced PHP 7.4, no Redis x30: OK; the busy runner repaired its copy 2 times (where losses occurred before)
+New regression tests: OK on PHP 8.3 and 7.4.
+Full suite, PHP 8.3 + Redis: OK (244 tests, 2180 assertions)
+Full suite, PHP 7.4 + Redis: OK (244 tests, 2180 assertions)
+ScheduledSync, Concurrency, Recovery, TransactionLoss, EditorConflict, Sync tests, no Redis:
+   PHP 8.3 OK (83 tests, 1331 assertions); PHP 7.4 OK (83 tests, 1331 assertions)
+PHPCS (WPCS 3.1 + PHPCompatibilityWP, testVersion 7.4-): no findings. POT unchanged.
+
+-- RC identity
+dist/tablerefresh-1.0.0-rc4.zip = sh dev/build-zip.sh a006c4f rc4, 25 files, 76,139 bytes,
+SHA-256 77fae5276f3a99af580f55a2dc3ff57fe7a47c3bb421e15cb97482e314061c77 (two builds identical).
+One top-level folder tablerefresh/; every file byte-identical to its blob in a006c4f; no CR bytes;
+no debug, test or trace code. readme: Contributors arsenmanukyan, Stable tag 1.0.0.
+
+-- upgrade RC3 -> RC4 (throwaway site on :8090, removed afterwards; owner's RC site untouched, stopped)
+RC3 with three Google-sheet tables (hourly, weekly enabled; daily with automatic sync off), setup +
+manual sync each. RC4 installed over the active plugin (no deactivation): installed files == RC4 ZIP;
+snapshot before/after (table content, meta, revisions, configurations, sync state, history, WP-Cron
+events) identical. Scheduled events run under RC4: both "unchanged", one event each; the manual-only
+table has none; table content and revisions unchanged.
+Plugin Check 2.1.0, --include-experimental, on the installed RC4: "Checks complete. No errors found."
+
+-- remaining risks
+WordPress's cron storage is not safe for concurrent writers in general (each request writes back its
+own copy of the whole array); TableRefresh cannot change that. The fix makes every scheduled run,
+including a busy one, leave its own table's event consistent in that runner's copy; events of other
+plugins are outside TableRefresh's control. The list screen's reconcile remains a second safety net.
+Only the traced cause (identical simultaneous writes) was reproduced; other overlapping-writer
+orderings were not observed in 180 runs after the fix. Not run: browser workflow on RC4 (no admin change since the
+38/38 run), matrices, MyISAM and live-Google groups.
