@@ -1,4 +1,4 @@
-# Handoff – 2026-10-28 (home computer, after RC5)
+# Handoff – 2026-11-01 (home computer, after RC6)
 
 ## Where things stand
 
@@ -79,9 +79,22 @@
   `dev/release-checks/rc5-results/focused-verification.txt`.
 - At submission: WordPress.org derives the slug from the name; request `tablerefresh` (text domain) before approval.
 
+## RC6 (2026-11-01): WordPress.org review "Pending corrections"
+
+- Submitted RC5 on 2026-10-28; slug `tablerefresh` assigned. Review AUTOPREREVIEW tablerefresh/arsenmanukyan/1Nov26/T1:
+  A. distinctive prefixes (namespace `TableRefresh`, `wp_schedule_event` in class-scheduler.php:73); B. Guideline 11
+  (possible dashboard hijacking through notices).
+- Fixes on the local branch `rc6-wporg-review` (not pushed, not merged): namespace `ArsenManukyan\TableRefresh`
+  (reviewer's example); the "requires TablePress" notice only on the Plugins screen (was on every admin screen);
+  uninstall also removes the notice transients. Stored names, hooks, handles, constants, CLI command keep the slug
+  prefix `tablerefresh`, so the RC5 -> RC6 upgrade needs no migration (verified).
+- RC6 = `f269c27` (not tagged). ZIP: `sh dev/build-zip.sh f269c27 rc6`, 25 files,
+  SHA-256 `28f5329e6d9b9e486435742725689059c18366039de890b7427d775c0d9b3085`. Checks:
+  `dev/release-checks/rc6-results/focused-verification.txt`. Draft reply to the reviewer: in the owner's notes.
+
 ## Remaining
 
-1. Owner review of RC5; WordPress.org submission only with explicit approval.
+1. Owner review of RC6; upload to WordPress.org and reply to the review only with explicit approval.
 2. Optional: deferred matrices (TablePress 3.1–3.4, MySQL 8.x); screen-reader pass.
 
 ## Tools

@@ -93,3 +93,9 @@ TablePress 3.0.3 [server: 10.11.19-MariaDB-ubu2204, TablePress 3.0.3]: suite: Te
 TablePress 3.0 [server: 10.11.19-MariaDB-ubu2204, TablePress 3.0, WordPress 7.1.3, PHP 8.3.35]: suite: Tests: 238, Assertions: 2072, Skipped: 4. | engine group: OK (3 tests, 23 assertions)
 == 2026-10-28 17:34 UTC commit 209225e: tablepress 3.0
 TablePress 3.0 [server: 10.11.19-MariaDB-ubu2204, TablePress 3.0, WordPress 7.1.3, PHP 8.3.36]: suite: Tests: 246, Assertions: 2169, Skipped: 4. | engine group: OK (3 tests, 23 assertions)
+== 2026-11-01 19:26 UTC commit f269c27: tablepress 3.0
+TablePress 3.0 [server: 10.11.19-MariaDB-ubu2204, TablePress 3.0, WordPress 7.1.3, PHP 8.3.36]: suite: Tests: 251, Assertions: 2303, Skipped: 4. | engine group: OK (3 tests, 23 assertions)
+== 2026-11-01 19:29 UTC commit f269c27: wp 6.7.10
+WordPress 6.7.10 [server: 10.11.19-MariaDB-ubu2204, TablePress 3.4.1, WordPress 6.7.10, PHP 8.3.36]: suite: Tests: 251, Assertions: 2303, Skipped: 4. | engine group: OK (3 tests, 23 assertions)
+== 2026-11-01 19:32 UTC commit f269c27: php 8.4
+PHP 8.4 (WP-CLI) [server: 10.11.19-MariaDB-ubu2204, TablePress 3.4.1, WordPress 7.1.3, PHP 8.4.27]: suite: Tests: 251, Assertions: 2303, Skipped: 4. | engine group: OK (3 tests, 23 assertions)

@@ -1,0 +1,114 @@
+== 2026-11-01, focused verification of v1.0.0 RC6 (f269c27), home machine (Windows 11, Docker 20.10.22)
+Reason: WordPress.org review "Pending corrections" of RC5 (AUTOPREREVIEW tablerefresh/arsenmanukyan/1Nov26/T1):
+  A. distinctive prefixes (flagged: namespace TableRefresh in 4 files, class-scheduler.php:73 wp_schedule_event,
+     "10 more"; suggested namespace arsenmanukyan\tablerefresh);
+  B. Guideline 11, possible admin dashboard hijacking through notices (potential issue).
+Branch rc6-wporg-review (local, not pushed, not merged). Dev site: WordPress 7.1.4, TablePress 3.4.1, MariaDB 10.11,
+Redis object cache enabled; WP-CLI on PHP 8.3.36 and 7.4.33. Clean sites: WordPress 7.1.3 (wordpress:php8.4-apache).
+
+-- audit of RC5 (209225e)
+Identifiers: all 19 class files in the single-level namespace TableRefresh; no global functions or classes.
+Everything else already carries the plugin slug: constants TABLEREFRESH_VERSION/_FILE/_DIR; hooks
+tablerefresh_* (13 actions/filters); WP-Cron hook tablerefresh_scheduled_sync (args: [post ID]); options
+tablerefresh_lock_<md5>, tablerefresh_journal_<md5>; transients tablerefresh_notice_<user>, tablerefresh_form_<user>;
+post meta _tablerefresh_source/_log/_sync_state/_sync_revision/_editor_<user>; admin page and menu slug
+tablerefresh; admin-post actions and nonces tablerefresh_<action>[_<post>]; handle tablerefresh-admin; JS object
+tablerefreshAdmin; CSS classes tablerefresh-*; WP-CLI command "tablerefresh"; error codes tablerefresh_*;
+uninstall.php variables $tablerefresh_*. Text domain and slug tablerefresh. No class name is stored anywhere
+(cron events store the hook name and post ID only; no serialized objects).
+class-scheduler.php:73: wp_schedule_event( ..., self::HOOK, ... ); self::HOOK = 'tablerefresh_scheduled_sync'
+(line 24), i.e. prefixed; the static analyser cannot resolve the constant.
+WPCS PrefixAllGlobals matches prefixes case-insensitively, so it accepted namespace TableRefresh under the
+prefix "tablerefresh" (checked with a negative control); it cannot enforce the vendor namespace.
+Admin notices outside the plugin's own screen:
+  1. "requires TablePress" (activate_plugins): on EVERY admin screen while TablePress is missing or < 3.0;
+     self-resolving, but not limited in scope; also printed twice on the TableRefresh screen (admin notice +
+     inline error with different wording). WordPress's own unmet-dependency notice appears only on
+     plugins.php and plugin-install.php.
+  2. "automatic sync is paused ... needs your decision" (TableRefresh capability, manage_options): only on the
+     Dashboard and TablePress screens; links to the decision; disappears when resolved. Compliant; kept.
+  3. Action results: only on the plugin's screen, once (per-user transient), dismissible.
+No dashboard widgets, ads, upgrade prompts or tracking. Every admin-post handler checks a per-action/per-table
+nonce, the TableRefresh capability and tablepress_edit_table; TablePress inactive: screen explains, handlers
+stop with 503. uninstall.php left the notice/form transients (expire after 5 minutes).
+
+-- changes (b14eba6, f269c27)
+1. Namespace TableRefresh -> ArsenManukyan\TableRefresh (the reviewer's example; PHP namespace names are
+   case-insensitive). Main file: activation/deactivation callbacks and Plugin::init(). PHPCS prefix list:
+   tablerefresh + ArsenManukyan\TableRefresh. Tests, test mu-plugin and browser scripts updated.
+   Stored and public names unchanged (slug prefix), so no migration: upgrade keeps data and events.
+2. Dependency notice only on the Plugins screen (screen id "plugins"); the TableRefresh screen shows the same
+   message once, in place, with "Go to Plugins" (activate_plugins only). Message text unchanged.
+3. uninstall.php also deletes _transient_tablerefresh_% and _transient_timeout_tablerefresh_% rows.
+4. POT regenerated (new msgid "Go to Plugins"; line references), POT-Creation-Date removed as before.
+No sync engine, scheduling, security or CLI change.
+
+-- new tests
+IdentifiersTest (3): every class file declares exactly namespace ArsenManukyan\TableRefresh and one class that
+   exists there, no functions; nothing in the former namespace; main file and uninstall.php declare only
+   TABLEREFRESH_* constants and $tablerefresh_* variables; activate_/deactivate_ hooks call
+   ArsenManukyan\TableRefresh\Plugin::activate/deactivate (callable); the cron hook calls Scheduler::run;
+   stored names frozen (cron hook, five meta keys/prefixes, lock and journal prefixes).
+AdminScreenTest::test_dependency_notice_only_on_the_plugins_screen: TablePress inactive -> no notice on
+   Dashboard, Posts, Settings, Tools; exactly one on Plugins; exactly one on the TableRefresh screen, with the
+   Plugins link; none on Plugins while TablePress is active.
+AdminScreenTest::test_attention_notice_only_on_the_dashboard_and_tablepress_screens: once on Dashboard and
+   TablePress; not on Posts, Settings, Plugins, TableRefresh; not for editors; gone once resolved.
+ScheduledSyncTest::test_uninstall_removes_tablerefresh_data_but_not_the_table: also lock, journal and
+   transient rows removed; similarly named options of other plugins kept.
+dev/mutation-check.sh: four new mutations (see results).
+
+-- results
+Baseline, RC5 code (main f4cffc5), + Redis: PHP 8.3 OK (246 tests, 2200 assertions); PHP 7.4 OK (246, 2200).
+RC6 (b14eba6), + Redis: PHP 8.3 OK (251 tests, 2334 assertions); PHP 7.4 OK (251 tests, 2334 assertions).
+PHP lint, 44 files (plugin, tests, mu-plugin): PHP 7.4.33 and 8.3.36, no errors.
+PHPCS (WPCS 3.1 + PHPCompatibilityWP, testVersion 7.4-): no findings.
+Mutations (dev/mutation-check.sh on f269c27, 11 min 56 s): 48 of 49 caught; "no decoded-size abort" survived on
+   PHP 8.3 as documented (libcurl >= 8.4) and was caught on CLI_SERVICE=cli74 (Tests: 1, Assertions: 3,
+   Failures: 1). New: dependency notice on every admin screen, attention notice on every admin screen, uninstall
+   leaves the admin notice transients, activation hook names the former namespace: all caught.
+Live Google Sheets group (--group external), PHP 8.3: OK (4 tests, 58 assertions).
+Engine group (MyISAM, non-atomic path): PHP 8.3 OK (3 tests, 23 assertions); PHP 7.4 OK (same).
+Targeted matrix on f269c27 (fresh projects, no Redis; dev/matrix-results.txt), 0 failures each:
+   TablePress 3.0:       Tests: 251, Assertions: 2303, Skipped: 4 (PersistentCacheTest); engine group OK (3, 23)
+   WordPress 6.7.10:     Tests: 251, Assertions: 2303, Skipped: 4; engine group OK (3, 23)
+   PHP 8.4.27 (WP-CLI):  Tests: 251, Assertions: 2303, Skipped: 4; engine group OK (3, 23)
+
+-- RC identity
+dist/tablerefresh-1.0.0-rc6.zip = sh dev/build-zip.sh f269c27 rc6, 25 files, 76,707 bytes,
+SHA-256 28f5329e6d9b9e486435742725689059c18366039de890b7427d775c0d9b3085 (two builds identical, Git for Windows
+2.46.2). One top-level folder tablerefresh/; same file list as RC5; every file byte-identical to its blob in
+f269c27; no CR bytes. Version 1.0.0 (header, Stable tag, TABLEREFRESH_VERSION), Requires at least 6.7, Tested
+up to 7.1, Requires PHP 7.4, Requires Plugins: tablepress, Text Domain tablerefresh, GPL-2.0-or-later.
+Differs from RC5 in: the 19 class files (namespace line; class-admin.php and class-plugin.php also the notice),
+tablerefresh.php, uninstall.php, tablerefresh.pot. readme.txt and assets unchanged.
+
+-- installed ZIP (throwaway site, COMPOSE_PROJECT_NAME=tablerefresh-shots, removed afterwards; owner's RC site
+   untouched: stopped, volumes kept)
+Clean-site check (RC5 -> RC6 upgrade and functions): 62 passed, 0 failed:
+  RC5 with three tables (hourly Google sheet, weekly public CSV, daily sheet with automatic sync off), setup syncs;
+  RC6 installed over the active plugin (wp plugin install --force): still active; new namespace loaded, former
+  absent; 25 installed files identical to the ZIP; snapshot of all _tablerefresh_* meta, table posts, revisions,
+  tablerefresh options and cron events identical before/after; Dashboard, list (with reconcile), settings and
+  history, Plugins: 200, no changes;
+  wp cron event run: one event per enabled table with its schedule, runs recorded, none for the manual table;
+  WP-Cron spawned by a normal page visit ran a due weekly sync and rescheduled exactly one event;
+  WP-CLI: Google text and JSON, repeat unchanged, public CSV 250 rows, missing table, 127.0.0.1 (url_blocked),
+  404, table unchanged after the failures, recover, help;
+  failure path: 5 failed scheduled runs -> paused, no event, table unchanged, attention notice on the Dashboard
+  only (not Posts, Plugins); source fixed + Sync now -> updated, resumed with one event, notice gone;
+  deactivate: 0 events, 4 configurations kept; activate: 3 events, one per enabled table;
+  TablePress deactivated: Dashboard/Posts without the dependency notice, Plugins once, TableRefresh screen once
+  with the Plugins link, front end 200, CLI tablepress_unavailable, scheduled run recorded as failed;
+  TablePress active again: sync works;
+  Plugin Check 2.1.0 (latest), --include-experimental: "Checks complete. No errors found.";
+  uninstall: no TableRefresh meta, options or cron events left; TablePress table kept with its data.
+  (A first run had 17 harness failures: MinGW curl paths under MSYS_NO_PATHCONV, unsorted checksum list, JSON
+  "\/" in comparisons, and a WP-CLI command right before the page visit, which sets WordPress's doing_cron
+  lock. Each was reproduced and fixed in the harness; no plugin change.)
+Browser workflow (workflow.js, ZIP uploaded through the admin, fresh site, public Google sample sheet): 38/38 PASS,
+  no JavaScript errors, no PHP notices in debug.log.
+
+-- not run
+Database matrix (no SQL change), TablePress 3.1-3.4.0, screen-reader pass, a11y scripts (no markup change except
+the inline notice text and link).
