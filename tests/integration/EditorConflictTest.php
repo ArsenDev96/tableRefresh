@@ -8,15 +8,15 @@
  * @package TableRefresh
  */
 
-use TableRefresh\Editor_Guard;
-use TableRefresh\Journal;
-use TableRefresh\Sync_State;
-use TableRefresh\Table_Lock;
-use TableRefresh\TablePress_Adapter;
+use ArsenManukyan\TableRefresh\Editor_Guard;
+use ArsenManukyan\TableRefresh\Journal;
+use ArsenManukyan\TableRefresh\Sync_State;
+use ArsenManukyan\TableRefresh\Table_Lock;
+use ArsenManukyan\TableRefresh\TablePress_Adapter;
 
 /**
- * @covers \TableRefresh\Editor_Guard
- * @covers \TableRefresh\Table_Updater
+ * @covers \ArsenManukyan\TableRefresh\Editor_Guard
+ * @covers \ArsenManukyan\TableRefresh\Table_Updater
  */
 class EditorConflictTest extends Integration_Test_Case {
 

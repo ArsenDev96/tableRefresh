@@ -5,10 +5,10 @@
  * @package TableRefresh
  */
 
-use TableRefresh\Sync_Service;
+use ArsenManukyan\TableRefresh\Sync_Service;
 
 /**
- * @covers \TableRefresh\Sync_Service::sanitize_cells
+ * @covers \ArsenManukyan\TableRefresh\Sync_Service::sanitize_cells
  */
 class CsvSafetyTest extends Integration_Test_Case {
 

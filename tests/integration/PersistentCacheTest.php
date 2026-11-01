@@ -8,8 +8,8 @@
  */
 
 /**
- * @covers \TableRefresh\Table_Updater
- * @covers \TableRefresh\TablePress_Adapter::clear_caches
+ * @covers \ArsenManukyan\TableRefresh\Table_Updater
+ * @covers \ArsenManukyan\TableRefresh\TablePress_Adapter::clear_caches
  */
 class PersistentCacheTest extends Integration_Test_Case {
 

@@ -8,14 +8,14 @@
  * @package TableRefresh
  */
 
-use TableRefresh\Journal;
-use TableRefresh\Sync_Service;
-use TableRefresh\Table_Lock;
-use TableRefresh\TablePress_Adapter;
+use ArsenManukyan\TableRefresh\Journal;
+use ArsenManukyan\TableRefresh\Sync_Service;
+use ArsenManukyan\TableRefresh\Table_Lock;
+use ArsenManukyan\TableRefresh\TablePress_Adapter;
 
 /**
- * @covers \TableRefresh\Table_Updater
- * @covers \TableRefresh\Journal
+ * @covers \ArsenManukyan\TableRefresh\Table_Updater
+ * @covers \ArsenManukyan\TableRefresh\Journal
  */
 class RecoveryTest extends Integration_Test_Case {
 

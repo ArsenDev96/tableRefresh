@@ -5,7 +5,7 @@
  * @package TableRefresh
  */
 
-namespace TableRefresh;
+namespace ArsenManukyan\TableRefresh;
 
 defined( 'ABSPATH' ) || exit;
 

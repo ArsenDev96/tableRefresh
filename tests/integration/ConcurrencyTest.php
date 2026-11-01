@@ -5,10 +5,10 @@
  * @package TableRefresh
  */
 
-use TableRefresh\Table_Lock;
+use ArsenManukyan\TableRefresh\Table_Lock;
 
 /**
- * @covers \TableRefresh\Table_Lock
+ * @covers \ArsenManukyan\TableRefresh\Table_Lock
  */
 class ConcurrencyTest extends Integration_Test_Case {
 

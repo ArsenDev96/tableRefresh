@@ -228,3 +228,19 @@ mutate class-cli-command.php \
 	"(string) wp_json_encode( \$value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE )" \
 	"(string) print_r( \$value, true )" \
 	"test_cli_text_output" "cli: text output values not JSON-encoded"
+mutate class-plugin.php \
+	"		if ( null === \$screen || 'plugins' !== \$screen->id || ! current_user_can( 'activate_plugins' ) || TablePress_Adapter::is_available() ) {" \
+	"		if ( ! current_user_can( 'activate_plugins' ) || TablePress_Adapter::is_available() ) {" \
+	"test_dependency_notice_only_on_the_plugins_screen" "dependency notice on every admin screen"
+mutate class-admin.php \
+	"( 'dashboard' !== \$screen->id && false === strpos( \$screen->id, 'tablepress' ) )" \
+	"false" \
+	"test_attention_notice_only_on_the_dashboard" "attention notice on every admin screen"
+mutate ../uninstall.php \
+	"		\$wpdb->esc_like( '_transient_tablerefresh_' ) . '%'," \
+	"		\$wpdb->esc_like( 'tablerefresh_lock_' ) . '%'," \
+	"test_uninstall_removes" "uninstall leaves the admin notice transients"
+mutate ../tablerefresh.php \
+	"array( 'ArsenManukyan\TableRefresh\Plugin', 'activate' )" \
+	"array( 'TableRefresh\Plugin', 'activate' )" \
+	"test_plugin_callbacks_resolve" "activation hook names the former namespace"

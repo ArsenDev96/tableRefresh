@@ -5,10 +5,10 @@
  * @package TableRefresh
  */
 
-use TableRefresh\Http_Fetcher;
+use ArsenManukyan\TableRefresh\Http_Fetcher;
 
 /**
- * @covers \TableRefresh\Http_Fetcher
+ * @covers \ArsenManukyan\TableRefresh\Http_Fetcher
  */
 class HttpFetcherTest extends Integration_Test_Case {
 

@@ -6,10 +6,10 @@
  */
 
 use PHPUnit\Framework\TestCase;
-use TableRefresh\Journal;
-use TableRefresh\Sync_Service;
-use TableRefresh\Table_Lock;
-use TableRefresh\TablePress_Adapter;
+use ArsenManukyan\TableRefresh\Journal;
+use ArsenManukyan\TableRefresh\Sync_Service;
+use ArsenManukyan\TableRefresh\Table_Lock;
+use ArsenManukyan\TableRefresh\TablePress_Adapter;
 
 /**
  * Helpers for creating tables, fixtures, and CLI subprocesses.

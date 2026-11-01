@@ -5,21 +5,21 @@
  * @package TableRefresh
  */
 
-use TableRefresh\Editor_Guard;
-use TableRefresh\Plugin;
-use TableRefresh\Scheduler;
-use TableRefresh\Sync_Config;
-use TableRefresh\Sync_Log;
-use TableRefresh\Sync_Runner;
-use TableRefresh\Sync_State;
-use TableRefresh\Table_Lock;
-use TableRefresh\TablePress_Adapter;
+use ArsenManukyan\TableRefresh\Editor_Guard;
+use ArsenManukyan\TableRefresh\Plugin;
+use ArsenManukyan\TableRefresh\Scheduler;
+use ArsenManukyan\TableRefresh\Sync_Config;
+use ArsenManukyan\TableRefresh\Sync_Log;
+use ArsenManukyan\TableRefresh\Sync_Runner;
+use ArsenManukyan\TableRefresh\Sync_State;
+use ArsenManukyan\TableRefresh\Table_Lock;
+use ArsenManukyan\TableRefresh\TablePress_Adapter;
 
 /**
- * @covers \TableRefresh\Sync_Config
- * @covers \TableRefresh\Sync_Log
- * @covers \TableRefresh\Sync_Runner
- * @covers \TableRefresh\Scheduler
+ * @covers \ArsenManukyan\TableRefresh\Sync_Config
+ * @covers \ArsenManukyan\TableRefresh\Sync_Log
+ * @covers \ArsenManukyan\TableRefresh\Sync_Runner
+ * @covers \ArsenManukyan\TableRefresh\Scheduler
  */
 class ScheduledSyncTest extends Integration_Test_Case {
 
@@ -317,7 +317,7 @@ class ScheduledSyncTest extends Integration_Test_Case {
 			$this->assertGreaterThan( time(), Scheduler::next_run( $post_id ) );
 			$this->assertContains( Sync_Log::last( $post_id )['outcome'], array( 'updated', 'unchanged' ) );
 			$this->assertFalse( Table_Lock::is_locked( $table_id ) );
-			$this->assertNull( \TableRefresh\Journal::read( $table_id ) );
+			$this->assertNull( \ArsenManukyan\TableRefresh\Journal::read( $table_id ) );
 		}
 	}
 
@@ -403,12 +403,27 @@ class ScheduledSyncTest extends Integration_Test_Case {
 		( new Sync_Runner() )->run( $post_id, 'manual' );
 		$data = $this->load_table( $table_id )['data'];
 
+		// Rows that can be left in the options table: an admin notice and form state (transients
+		// of 5 minutes, in the database without a persistent object cache), a lock and a journal.
+		global $wpdb;
+		$own   = array( '_transient_tablerefresh_notice_1', '_transient_timeout_tablerefresh_notice_1', '_transient_tablerefresh_form_1', '_transient_timeout_tablerefresh_form_1', 'tablerefresh_lock_uninstalltest', 'tablerefresh_journal_uninstalltest' );
+		$other = array( '_transient_tablerefreshx_test', 'tablerefreshx_test' ); // Not TableRefresh's prefix.
+		foreach ( array_merge( $own, $other ) as $name ) {
+			$wpdb->query( $wpdb->prepare( "INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, '1', 'off')", $name ) );
+		}
+
 		$code = "define( 'WP_UNINSTALL_PLUGIN', 'tablerefresh/tablerefresh.php' ); include WP_PLUGIN_DIR . '/tablerefresh/uninstall.php';";
 		shell_exec( 'wp --path=' . escapeshellarg( TABLEREFRESH_TESTS_WP_DIR ) . ' eval ' . escapeshellarg( $code ) . ' 2>&1' );
 
 		wp_cache_flush_runtime();
-		global $wpdb;
+		$remaining = static function ( array $names ) use ( $wpdb ) {
+			return $wpdb->get_col( "SELECT option_name FROM {$wpdb->options} WHERE option_name IN ('" . implode( "','", array_map( 'esc_sql', $names ) ) . "')" );
+		};
+		$left = $remaining( $other );
+		$wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name IN ('" . implode( "','", array_map( 'esc_sql', $other ) ) . "')" );
 		$this->assertSame( 0, (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$wpdb->postmeta} WHERE post_id = %d AND meta_key LIKE %s", $post_id, $wpdb->esc_like( '_tablerefresh_' ) . '%' ) ) );
+		$this->assertSame( array(), $remaining( $own ) );
+		$this->assertEqualsCanonicalizing( $other, $left, 'Options of other plugins are kept.' );
 		$this->assertFalse( wp_next_scheduled( Scheduler::HOOK, array( $post_id ) ) );
 		$this->assertSame( $data, $this->load_table( $table_id )['data'], 'The TablePress table is kept.' );
 	}

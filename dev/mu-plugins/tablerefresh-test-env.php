@@ -348,5 +348,5 @@ function tablerefresh_test_kill_connection() {
  * @return bool
  */
 function tablerefresh_test_is_writing() {
-	return class_exists( 'TableRefresh\Table_Updater', false ) && TableRefresh\Table_Updater::is_writing();
+	return class_exists( 'ArsenManukyan\TableRefresh\Table_Updater', false ) && ArsenManukyan\TableRefresh\Table_Updater::is_writing();
 }

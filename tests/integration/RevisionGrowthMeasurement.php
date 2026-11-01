@@ -39,7 +39,7 @@ trait Revision_Growth_Measurement {
 	 */
 	private function growth( string $table_id ): array {
 		global $wpdb;
-		$post_id = TableRefresh\TablePress_Adapter::get_post_id( $table_id );
+		$post_id = ArsenManukyan\TableRefresh\TablePress_Adapter::get_post_id( $table_id );
 		$row     = $wpdb->get_row( $wpdb->prepare( "SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(post_content)), 0) AS bytes FROM {$wpdb->posts} WHERE post_parent = %d AND post_type = 'revision'", $post_id ), ARRAY_A );
 		$sync    = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$wpdb->posts} p JOIN {$wpdb->postmeta} m ON m.post_id = p.ID AND m.meta_key = '_tablerefresh_sync_revision' WHERE p.post_parent = %d AND p.post_type = 'revision'", $post_id ) );
 		$meta    = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$wpdb->postmeta} WHERE post_id = %d OR post_id IN (SELECT ID FROM {$wpdb->posts} WHERE post_parent = %d)", $post_id, $post_id ) );

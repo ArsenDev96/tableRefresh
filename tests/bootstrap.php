@@ -25,7 +25,7 @@ define( 'TABLEREFRESH_TESTS_FIXTURE_URL', 'http://fixtures' );
 
 require TABLEREFRESH_TESTS_WP_DIR . '/wp-load.php';
 
-if ( ! class_exists( 'TableRefresh\Sync_Service' ) || ! TableRefresh\TablePress_Adapter::is_available() ) {
+if ( ! class_exists( 'ArsenManukyan\TableRefresh\Sync_Service' ) || ! ArsenManukyan\TableRefresh\TablePress_Adapter::is_available() ) {
 	fwrite( STDERR, "TableRefresh and TablePress must be active in the test site.\n" );
 	exit( 1 );
 }

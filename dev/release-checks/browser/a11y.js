@@ -25,11 +25,11 @@ const log = ( line ) => { out.push( line ); console.log( line ); };
 		await page.type( '#user_pass', 'admin' );
 		await Promise.all( [ page.waitForNavigation( { waitUntil: 'networkidle2' } ), page.click( '#wp-submit' ) ] );
 	}
-	const postId = wp( 'echo (int) key( TableRefresh\\Sync_Config::all() );' );
+	const postId = wp( 'echo (int) key( ArsenManukyan\\TableRefresh\\Sync_Config::all() );' );
 
 	// A second table, so that the set-up form has a choice; the configured table in conflict.
 	wp( 'wp_set_current_user( 1 ); $t = TablePress::$model_table->get_table_template(); $t["name"] = "Opening hours"; $t["data"] = array( array( "x" ) ); $t["visibility"] = array( "rows" => array( 1 ), "columns" => array( 1 ) ); echo TablePress::$model_table->add( $t );' );
-	wp( `wp_set_current_user( 1 ); $id = TableRefresh\\TablePress_Adapter::get_table_id( ${ postId } ); $t = TablePress::$model_table->load( $id ); $t["data"][1][1] = "edited"; TablePress::$model_table->save( $t ); $r = ( new TableRefresh\\Sync_Runner() )->run( ${ postId }, "manual" ); echo $r["outcome"];` );
+	wp( `wp_set_current_user( 1 ); $id = ArsenManukyan\\TableRefresh\\TablePress_Adapter::get_table_id( ${ postId } ); $t = TablePress::$model_table->load( $id ); $t["data"][1][1] = "edited"; TablePress::$model_table->save( $t ); $r = ( new ArsenManukyan\\TableRefresh\\Sync_Runner() )->run( ${ postId }, "manual" ); echo $r["outcome"];` );
 
 	const axe = async ( label, url ) => {
 		await go( url );
@@ -58,7 +58,7 @@ const log = ( line ) => { out.push( line ); console.log( line ); };
 	} ) );
 	log( 'semantics: ' + JSON.stringify( semantics ) );
 	await go( tr ); // Notices announced as status / alert.
-	wp( `$p = ${ postId }; ( new TableRefresh\\Sync_Runner() )->run( $p, "manual" );` );
+	wp( `$p = ${ postId }; ( new ArsenManukyan\\TableRefresh\\Sync_Runner() )->run( $p, "manual" );` );
 
 	// Keyboard: Tab through the set-up form from the address bar; every control reachable, focus visible.
 	await go( tr + '&action=add' );

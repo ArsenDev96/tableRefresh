@@ -11,8 +11,8 @@
  */
 
 /**
- * @covers \TableRefresh\Http_Fetcher
- * @covers \TableRefresh\Sync_Service
+ * @covers \ArsenManukyan\TableRefresh\Http_Fetcher
+ * @covers \ArsenManukyan\TableRefresh\Sync_Service
  */
 class GoogleSheetsLocalTest extends Integration_Test_Case {
 
@@ -44,7 +44,7 @@ class GoogleSheetsLocalTest extends Integration_Test_Case {
 		$this->assertIsArray( $result, is_wp_error( $result ) ? $result->get_error_message() : '' );
 		$this->assertSame( 'updated', $result['status'] );
 		$this->assertSame( 1, $result['redirects'] );
-		$this->assertSame( 'text/csv', ( new TableRefresh\Http_Fetcher() )->fetch( $url )['content_type'] );
+		$this->assertSame( 'text/csv', ( new ArsenManukyan\TableRefresh\Http_Fetcher() )->fetch( $url )['content_type'] );
 		$this->assertSame( $rows, $this->load_table( $table_id )['data'] );
 
 		$this->assertSame( 'unchanged', $this->sync( $table_id, $url )['status'] );

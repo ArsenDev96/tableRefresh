@@ -9,13 +9,16 @@ defined( 'WP_UNINSTALL_PLUGIN' ) || exit;
 
 global $wpdb;
 
-// Locks and recovery journals; option names are prefixed and hashed per table.
+// Locks and recovery journals (option names are prefixed and hashed per table), and the
+// short-lived admin notices and form states stored as transients per user.
 // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 $wpdb->query(
 	$wpdb->prepare(
-		"DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s",
+		"DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s OR option_name LIKE %s OR option_name LIKE %s",
 		$wpdb->esc_like( 'tablerefresh_lock_' ) . '%',
-		$wpdb->esc_like( 'tablerefresh_journal_' ) . '%'
+		$wpdb->esc_like( 'tablerefresh_journal_' ) . '%',
+		$wpdb->esc_like( '_transient_tablerefresh_' ) . '%',
+		$wpdb->esc_like( '_transient_timeout_tablerefresh_' ) . '%'
 	)
 );
 
