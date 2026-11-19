@@ -38,6 +38,10 @@
  * - TABLEREFRESH_TEST_NO_TRANSACTIONS=1             Simulate a database without transactions and opt in
  *                                                    to non-atomic updates (refused by default).
  * - TABLEREFRESH_TEST_LOCK_TTL=<seconds>            Shorter lock lifetime for stale-lock tests.
+ * - TABLEREFRESH_TEST_CRON_BUDGET=<seconds>         Time budget of a scheduled-task request (decimals allowed),
+ *                                                    also on the command line, where it is off by default.
+ * - TABLEREFRESH_TEST_FAULT=kill_during_deferral     SIGKILL the process at the first change of WP-Cron's list
+ *   that TableRefresh makes while handing a table to the next request (the second scheduled sync of the request).
  * - TABLEREFRESH_TEST_BLOCK_FIXTURES=1              Do not allowlist the private fixture host.
  * - TABLEREFRESH_TEST_BARRIER=<name>:<count>        Once WordPress is loaded, wait (at most 60 s) until
  *   <count> processes reached the barrier <name>, so that parallel processes start their command
@@ -66,6 +70,15 @@ if ( getenv( 'TABLEREFRESH_TEST_LOCK_TTL' ) ) {
 		'tablerefresh_lock_ttl',
 		static function () {
 			return (int) getenv( 'TABLEREFRESH_TEST_LOCK_TTL' );
+		}
+	);
+}
+
+if ( false !== getenv( 'TABLEREFRESH_TEST_CRON_BUDGET' ) ) {
+	add_filter(
+		'tablerefresh_cron_time_budget',
+		static function () {
+			return (float) getenv( 'TABLEREFRESH_TEST_CRON_BUDGET' );
 		}
 	);
 }
@@ -130,6 +143,27 @@ function tablerefresh_test_human_save( $table_id, $background ) {
 }
 
 $tablerefresh_test_fault = (string) getenv( 'TABLEREFRESH_TEST_FAULT' );
+if ( 'kill_during_deferral' === $tablerefresh_test_fault ) {
+	// WP-Cron changes its list for an event before it runs it; inside the callback of the second
+	// scheduled sync (which a tiny time budget defers), only TableRefresh changes it.
+	$tablerefresh_test_syncs = 0;
+	add_action(
+		'tablerefresh_scheduled_sync',
+		static function () use ( &$tablerefresh_test_syncs ) {
+			++$tablerefresh_test_syncs;
+		},
+		1
+	);
+	add_action(
+		'update_option_cron',
+		static function () use ( &$tablerefresh_test_syncs ) {
+			if ( $tablerefresh_test_syncs >= 2 && doing_action( 'tablerefresh_scheduled_sync' ) ) {
+				fwrite( STDERR, "TEST FAULT: SIGKILL\n" );
+				posix_kill( getmypid(), 9 );
+			}
+		}
+	);
+}
 if ( 'kill_after_revision' === $tablerefresh_test_fault ) {
 	// Right after WordPress stored the revision of the new data (and TableRefresh marked it),
 	// before TablePress wrote the table options and visibility.

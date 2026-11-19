@@ -1,3 +1,27 @@
+# Handoff – 2026-11-19 (office → home, 1.0.1 scheduler work in progress)
+
+## 1.0.1 scheduler work (branch `scheduler-1.0.1-hardening`, NOT verified, not for release yet)
+
+- Branch `scheduler-1.0.1-hardening` holds the scheduler time budget for 1.0.1 (a web cron request starts no
+  further sync after 10 s; deferred tables keep the time they became due) plus the hardening from the independent
+  review of 2026-11-19. `main` is unchanged (RC5 state). Version is still 1.0.0: no bump, no changelog entry, no ZIP.
+- Hardening done (`class-scheduler.php`): `place_event()` adds the new event before it removes the others and only
+  after the add is confirmed, re-reads WP-Cron's list after a write that failed or changed no row, checks the result
+  and repairs once; used by `defer()` (both branches) and `apply()`. A `_tablerefresh_turn` marker later than now is
+  ignored and deleted; `run()` writes it only for a configured table and a due time that has passed; `apply()` with
+  no configuration deletes it. Readme: a cron job that requests wp-cron.php over HTTP has the web limit.
+- Checked on this branch: `ScheduledSyncTest` on PHP 8.3 = 38 tests, 4389 assertions, OK (5 new regression tests);
+  PHPCS on the plugin clean; PHP 7.4 lint of the scheduler OK.
+- NOT done yet, in this order (one Docker run at a time):
+  1. Scheduler mutations: `sh dev/mutation-check.sh` (18 scheduler mutations, 8 new or changed; never completed).
+  2. `sh dev/run-tests.sh` (full suite, PHP 8.3), then `CLI_SERVICE=cli74 sh dev/run-tests.sh`.
+  3. `sh dev/test-matrix.sh wp 6.7.10` (minimum WordPress version).
+  4. Final report and verdict; then version 1.0.1, changelog, upgrade notice (owner's decision).
+- Careful: stopping `mutation-check.sh` from outside can leave it running; it then keeps mutating
+  `class-scheduler.php`. Kill the `sh` processes, then `mv class-scheduler.php.orig class-scheduler.php` if the
+  `.orig` file exists, and restart the `wordpress` container.
+- The dev site here ran with TablePress 3.5 (readme says tested with 3.0 and 3.4.1).
+
 # Handoff – 2026-10-28 (home computer, after RC5)
 
 ## Where things stand

@@ -186,9 +186,8 @@ mutate class-sync-runner.php \
 	"			} elseif ( false ) {" \
 	"test_automatic_sync_pauses_after_repeated_failures" "runner: endless retries"
 mutate class-scheduler.php \
-	"		wp_clear_scheduled_hook( self::HOOK, \$args );
-		wp_schedule_event(" \
-	"		wp_schedule_event(" \
+	"		self::place_event( \$post_id, time() + \$interval, \$config['frequency'] ); // Never without an event in between." \
+	"		wp_schedule_event( time() + \$interval, \$config['frequency'], self::HOOK, \$args );" \
 	"test_exactly_one_event" "scheduler: duplicate events"
 mutate class-table-updater.php \
 	"		if ( null === \$current ) {
@@ -220,6 +219,77 @@ mutate class-scheduler.php \
 	"		if ( 'busy' === \$result['outcome'] ) {" \
 	"		if ( false ) {" \
 	"test_runner_that_finds_the_table_busy" "scheduler: busy runner leaves a lost event lost"
+mutate class-scheduler.php \
+	"		if ( self::over_budget() ) {" \
+	"		if ( false ) {" \
+	"test_slow_sources_ahead_do_not_get_a_table_cut_off" "scheduler: no time budget for cron requests"
+mutate class-scheduler.php \
+	"		if ( 0 === self::\$started || ! wp_doing_cron() ) {" \
+	"		if ( ! wp_doing_cron() ) {" \
+	"test_cron_request_hands_remaining_syncs" "scheduler: first sync of a request can be deferred"
+mutate class-scheduler.php \
+	"		\$latest   = min( time(), \$event['time'] - \$interval ); // The last regular time that has passed." \
+	"		\$latest   = time();" \
+	"test_cron_request_hands_remaining_syncs" "scheduler: deferred table loses its place and regular time"
+mutate class-scheduler.php \
+	"		\$time = null !== \$due && \$due <= \$latest && 0 === ( \$latest - \$due ) % \$interval ? \$due : \$latest;" \
+	"		\$time = \$latest;" \
+	"overload|keeps_its_original_due_time|backlog" "scheduler: repeated deferral loses the original due time (starvation)"
+mutate class-scheduler.php \
+	"		add_filter( 'pre_reschedule_event', array( __CLASS__, 'note_due_time' ), 10, 2 );" \
+	"" \
+	"test_minimal_overload|keeps_its_original_due_time" "scheduler: due times reported by WP-Cron not noted"
+mutate class-scheduler.php \
+	"			self::place_event( \$post_id, time(), \$config['frequency'] );
+			return;" \
+	"			wp_clear_scheduled_hook( self::HOOK, array( \$post_id ) );
+			wp_schedule_event( time(), \$config['frequency'], self::HOOK, array( \$post_id ) );
+			return;" \
+	"test_interrupted_replacement_of_an_unexpected_event" "scheduler: unexpected event removed before the new one is added"
+mutate class-scheduler.php \
+	"					continue; // Not scheduled: the other events stay." \
+	"" \
+	"test_deferral_that_cannot_schedule" "scheduler: events removed although the new one was not scheduled"
+mutate class-scheduler.php \
+	"				if ( true !== wp_schedule_event( \$time, \$frequency, self::HOOK, \$args ) ) {
+					self::refresh_cron();
+				}" \
+	"				wp_schedule_event( \$time, \$frequency, self::HOOK, \$args );" \
+	"test_deferral_survives_an_identical_write" "scheduler: outdated copy of WP-Cron's list kept after a write that changed nothing"
+mutate class-scheduler.php \
+	"		if ( \$turn > time() ) {" \
+	"		if ( false ) {" \
+	"test_turn_marker_ahead_of_the_clock" "scheduler: turn marker ahead of the clock trusted"
+mutate class-scheduler.php \
+	"				delete_post_meta( \$post_id, self::TURN_META_KEY ); // Nothing of the scheduler stays without a configuration." \
+	"" \
+	"test_turn_marker_is_removed_with_the_configuration" "scheduler: turn marker kept after the configuration was removed"
+mutate class-scheduler.php \
+	"		if ( null !== \$due && \$due <= time() && null !== Sync_Config::get( \$post_id ) ) {" \
+	"		if ( null !== \$due ) {" \
+	"test_turn_marker_is_removed_with_the_configuration" "scheduler: turn marker written for a post without a configuration"
+mutate class-scheduler.php \
+	"		if ( null !== \$due && \$turn >= \$due ) {" \
+	"		if ( false ) {" \
+	"test_overlapping_request_does_not_hand_back" "scheduler: deferral hands back a turn an overlapping request took"
+mutate class-scheduler.php \
+	"			update_post_meta( \$post_id, self::TURN_META_KEY, \$due );" \
+	"" \
+	"test_overlapping_request_does_not_hand_back" "scheduler: started sync does not record its turn"
+mutate class-scheduler.php \
+	"		if ( null === \$event || \$config['frequency'] !== \$event['schedule'] || \$event['interval'] <= 0 ) {" \
+	"		if ( null === \$event ) {" \
+	"test_frequency_change_while_a_table_is_deferred|test_deferral_never_leaves" "scheduler: deferral keeps a changed frequency or a duplicate event"
+mutate class-scheduler.php \
+	"		if ( null === \$config || empty( \$config['enabled'] ) || '' !== \$config['attention'] ) {
+			self::apply( \$post_id, \$config ); // Removes the event." \
+	"		if ( null === \$config ) {
+			self::apply( \$post_id, \$config ); // Removes the event." \
+	"test_deferral_removes_events" "scheduler: deferral keeps events of disabled or paused tables"
+mutate class-scheduler.php \
+	"'cli' === PHP_SAPI ? 0 : self::TIME_BUDGET" \
+	"self::TIME_BUDGET" \
+	"test_command_line_cron_has_no_time_budget" "scheduler: command-line cron runs budgeted by default"
 mutate class-table-lock.php \
 	"WHERE option_name = %s FOR UPDATE\", \$name )" \
 	"WHERE option_name = %s\", \$name )" \

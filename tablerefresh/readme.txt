@@ -65,7 +65,7 @@ The tab that was open when you copied the link from the browser's address bar (t
 
 = Why did a sync run later than planned? =
 
-Automatic syncs use WordPress's scheduled tasks (WP-Cron). They run when someone visits your site, so on sites with few visitors they can run later than planned. For exact times, let a server cron job call wp-cron.php (with DISABLE_WP_CRON set in wp-config.php).
+Automatic syncs use WordPress's scheduled tasks (WP-Cron). They run when someone visits your site, so on sites with few visitors they can run later than planned. When many slow syncs are due at once, some of them wait for the next scheduled-task request; the longest-waiting tables go first. For exact times, let a server cron job call wp-cron.php (with DISABLE_WP_CRON set in wp-config.php).
 
 = What happens if someone edits a synchronized table in TablePress? =
 
@@ -107,7 +107,9 @@ Deactivating TableRefresh stops all automatic syncs and keeps the settings; acti
 
 * One source per table; CSV data only (Google Sheets are exported as CSV). At most 5 MB per download.
 * "Sync now" runs while you wait, up to about 15 seconds for a slow source.
-* All automatic syncs that are due run one after another in one scheduled-task request. If the server ends that request early, the remaining syncs run with the next scheduled tasks; a sync that was cut off is undone and runs again at its next scheduled time.
+* Automatic syncs that are due run one after another in a scheduled-task request, the longest-waiting first. After a web request has run for 10 seconds (filter `tablerefresh_cron_time_budget`), it starts no further sync, except that the first due sync of every request always starts. The remaining syncs keep their place and run with the next scheduled-task requests. Scheduled tasks run from the command line (a server cron job that runs wp-cron.php with PHP itself, or WP-CLI) have no such limit by default. A server cron job that requests wp-cron.php over HTTP (for example with curl or wget) is a web request and has the limit: call it often enough, or raise the limit with the filter.
+* A single sync can still take longer than a server allows a request to run: up to 15 seconds for a slow download, plus the time to process and save a large table. If the server ends the request during a sync, the sync is undone, is not shown in the history, and runs again at its next scheduled time.
+* If more syncs are due than the scheduled-task requests can run, every table still gets its turn, but tables are synchronized less often than scheduled.
 * A sync lock expires after 5 minutes (filter `tablerefresh_lock_ttl`); a sync that would take longer is stopped before it writes.
 * Only the TablePress editor's own "Save Changes" is checked against newer synchronized data. Other ways of writing to a table (for example a TablePress import into an existing table) can overwrite a sync; the next sync then reports the change instead of overwriting it.
 * TableRefresh relies on parts of TablePress that are not an official programming interface. This release is tested with the free TablePress 3.0 and 3.4.1; every release from 3.0 to 3.4.1 was tested during earlier development. TablePress Pro and Max are not tested.

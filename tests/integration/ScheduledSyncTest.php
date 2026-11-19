@@ -297,6 +297,7 @@ class ScheduledSyncTest extends Integration_Test_Case {
 	 * @return array<int, array{0: string, 1: int, 2: int}> Table ID, post ID, revisions before.
 	 */
 	private function overdue_tables( int $count ): array {
+		$this->run_wp_cron_php(); // WordPress's own due events first: they must not use up a web request's time budget.
 		$url    = $this->fixture( 'many.csv', self::V1 );
 		$tables = array();
 		for ( $i = 0; $i < $count; $i++ ) {
@@ -396,6 +397,866 @@ class ScheduledSyncTest extends Integration_Test_Case {
 		delete_transient( 'doing_cron' ); // Earlier page loads may have left WP-Cron's lock of a spawn that could not connect.
 		$this->http( '/wp-cron.php' ); // As a server cron job calls it.
 		$this->assertEachSyncedOnce( $tables );
+	}
+
+	/**
+	 * Starts core's wp-cron.php in a separate process, as a server cron job or WP-Cron's own spawn runs it.
+	 *
+	 * Clears WP-Cron's lock first: this is the next request after the previous one ended.
+	 *
+	 * @param array<string, string> $env Extra environment variables.
+	 * @return resource
+	 */
+	private function start_wp_cron_php( array $env = array() ) {
+		delete_transient( 'doing_cron' );
+		$process = proc_open(
+			array( 'php', TABLEREFRESH_TESTS_WP_DIR . '/wp-cron.php' ),
+			array(
+				1 => array( 'file', '/dev/null', 'w' ),
+				2 => array( 'file', '/dev/null', 'w' ),
+			),
+			$pipes,
+			TABLEREFRESH_TESTS_WP_DIR,
+			array_merge( getenv(), $env )
+		);
+		$this->assertIsResource( $process );
+		return $process;
+	}
+
+	/**
+	 * Waits for a wp-cron.php process; kills it (SIGKILL) after a wall-clock limit, as some hosts do.
+	 *
+	 * @param resource $process    Process from start_wp_cron_php().
+	 * @param float    $kill_after Seconds after which the process is killed (0: 120, as a safety net).
+	 * @return bool Whether the process was killed.
+	 */
+	private function wait_wp_cron_php( $process, float $kill_after = 0, bool $flush = true ): bool {
+		$deadline = microtime( true ) + ( $kill_after > 0 ? $kill_after : 120 );
+		$killed   = false;
+		while ( proc_get_status( $process )['running'] ) {
+			if ( microtime( true ) >= $deadline ) {
+				proc_terminate( $process, 9 );
+				$killed = true;
+				break;
+			}
+			usleep( 20000 );
+		}
+		proc_close( $process );
+		if ( $flush ) {
+			wp_cache_flush_runtime(); // The other process changed the cron option and post meta.
+		}
+		return $killed;
+	}
+
+	/**
+	 * Runs one wp-cron.php request.
+	 *
+	 * @param array<string, string> $env        Extra environment variables.
+	 * @param float                 $kill_after See wait_wp_cron_php().
+	 * @return bool Whether the process was killed.
+	 */
+	private function run_wp_cron_php( array $env = array(), float $kill_after = 0 ): bool {
+		return $this->wait_wp_cron_php( $this->start_wp_cron_php( $env ), $kill_after );
+	}
+
+	/**
+	 * Creates configured hourly tables whose events are due, in the given order (less than one interval overdue).
+	 *
+	 * Runs the events that are already due first (WordPress's own, for example update checks, which
+	 * contact wordpress.org), so that they cannot take time from the requests under test.
+	 *
+	 * @param string[] $urls Source URL of each table, in queue order.
+	 * @return array<int, array{0: string, 1: int, 2: int}> Table ID, post ID, time at which the event is due.
+	 */
+	private function due_tables( array $urls ): array {
+		$this->run_wp_cron_php();
+		$tables = array();
+		foreach ( array_values( $urls ) as $i => $url ) {
+			list( $table_id, $post_id ) = $this->configured_table( $url, 'hourly' );
+			$due                        = time() - 600 + $i;
+			wp_clear_scheduled_hook( Scheduler::HOOK, array( $post_id ) );
+			wp_schedule_event( $due, 'hourly', Scheduler::HOOK, array( $post_id ) );
+			$tables[] = array( $table_id, $post_id, $due );
+		}
+		return $tables;
+	}
+
+	/**
+	 * Number of recorded syncs of each table.
+	 *
+	 * @param array<int, array{0: string, 1: int, 2: int}> $tables Tables from due_tables().
+	 * @return int[]
+	 */
+	private function sync_counts( array $tables ): array {
+		$counts = array();
+		foreach ( $tables as list( , $post_id ) ) {
+			$counts[] = count( Sync_Log::get( $post_id )['entries'] );
+		}
+		return $counts;
+	}
+
+	/**
+	 * Whether any of the tables still has a due event.
+	 *
+	 * @param array<int, array{0: string, 1: int, 2: int}> $tables Tables from due_tables().
+	 * @return bool
+	 */
+	private function any_due( array $tables ): bool {
+		foreach ( $tables as list( , $post_id ) ) {
+			$next = Scheduler::next_run( $post_id );
+			if ( null !== $next && $next <= time() ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Lets one interval pass for the tables: their events become due again, at the same regular times.
+	 *
+	 * @param array<int, array{0: string, 1: int, 2: int}> $tables Tables from due_tables().
+	 * @return array<int, array{0: string, 1: int, 2: int}> The tables with their new due times.
+	 */
+	private function next_interval( array $tables ): array {
+		foreach ( $tables as $i => list( $table_id, $post_id ) ) {
+			$event = wp_get_scheduled_event( Scheduler::HOOK, array( $post_id ) );
+			$this->assertNotFalse( $event, "Table {$table_id} has an event." );
+			wp_clear_scheduled_hook( Scheduler::HOOK, array( $post_id ) );
+			wp_schedule_event( $event->timestamp - HOUR_IN_SECONDS, 'hourly', Scheduler::HOOK, array( $post_id ) );
+			$tables[ $i ][2] = $event->timestamp - HOUR_IN_SECONDS;
+			$turn            = (int) get_post_meta( $post_id, Scheduler::TURN_META_KEY, true ); // A due time as well.
+			if ( $turn > 0 ) {
+				update_post_meta( $post_id, Scheduler::TURN_META_KEY, $turn - HOUR_IN_SECONDS );
+			}
+		}
+		return $tables;
+	}
+
+	/**
+	 * A request that has used up its time budget starts no further sync. The next requests take the
+	 * remaining tables in their order; each request completes at least one sync, and every table keeps
+	 * its regular times.
+	 */
+	public function test_cron_request_hands_remaining_syncs_to_the_next_request_in_order() {
+		$tables = $this->due_tables( array_fill( 0, 4, $this->fixture( 's.csv', self::V1 ) ) );
+		$env    = array( 'TABLEREFRESH_TEST_CRON_BUDGET' => '0.001' ); // Used up before the first sync, which still runs.
+
+		foreach ( array( array( 1, 0, 0, 0 ), array( 1, 1, 0, 0 ), array( 1, 1, 1, 0 ), array( 1, 1, 1, 1 ) ) as $request => $expected ) {
+			$this->assertFalse( $this->run_wp_cron_php( $env ) );
+			$this->assertSame( $expected, $this->sync_counts( $tables ), "Request {$request}: the first due sync runs, the others wait." );
+			foreach ( $tables as $i => list( $table_id, $post_id, $due ) ) {
+				$this->assertSame( 1, Scheduler::count_events( $post_id ), "Table {$i} has one event." );
+				$this->assertSame( $expected[ $i ] ? $due + HOUR_IN_SECONDS : $due, Scheduler::next_run( $post_id ), "Table {$i} keeps its place and its regular time." );
+			}
+		}
+		foreach ( $tables as list( $table_id, $post_id ) ) {
+			$this->assertSame( 'Pear', $this->load_table( $table_id )['data'][2][0] );
+			$this->assertSame( 'updated', Sync_Log::last( $post_id )['outcome'] );
+			$this->assertFalse( Table_Lock::is_locked( $table_id ) );
+		}
+	}
+
+	/**
+	 * Regression: a host that stops long requests cut off the table in progress, and because the order
+	 * of the events stays the same, the same table in every interval. That table was never updated,
+	 * and nothing was recorded. With the time budget, the request ends before the host's limit and the
+	 * remaining tables run with the next request.
+	 */
+	public function test_slow_sources_ahead_do_not_get_a_table_cut_off_in_every_interval() {
+		$slow   = $this->fixture( 'slow.csv', self::V1, 'delay=5' );
+		$fast   = $this->fixture( 'fast.csv', self::V1 );
+		$tables = $this->due_tables( array( $slow, $slow, $slow, $fast, $fast ) );
+		$env    = array( 'TABLEREFRESH_TEST_CRON_BUDGET' => (string) Scheduler::TIME_BUDGET ); // The web default.
+
+		for ( $interval = 1; $interval <= 2; $interval++ ) {
+			for ( $request = 1; $request <= 5 && $this->any_due( $tables ); $request++ ) {
+				// Without the budget, the request runs into the limit during the third slow sync.
+				$this->assertFalse( $this->run_wp_cron_php( $env, 13 ), "Interval {$interval}, request {$request} ended before the host's 13-second limit." );
+			}
+			$this->assertSame( array_fill( 0, 5, $interval ), $this->sync_counts( $tables ), "Interval {$interval}: every table was synchronized once." );
+			foreach ( $tables as list( $table_id, $post_id ) ) {
+				$this->assertSame( 1, Scheduler::count_events( $post_id ) );
+				$this->assertGreaterThan( time(), Scheduler::next_run( $post_id ) );
+				$this->assertFalse( Table_Lock::is_locked( $table_id ) );
+				$this->assertNull( \TableRefresh\Journal::read( $table_id ) );
+			}
+			$tables = $this->next_interval( $tables );
+		}
+	}
+
+	public function test_web_cron_request_has_a_time_budget_by_default() {
+		$slow   = $this->fixture( 'slow.csv', self::V1, 'delay=6' );
+		$tables = $this->due_tables( array( $slow, $slow, $this->fixture( 'fast.csv', self::V1 ) ) );
+
+		delete_transient( 'doing_cron' );
+		$this->http( '/wp-cron.php' ); // Served by Apache, as WP-Cron's own spawn or a server cron job with curl.
+		wp_cache_flush_runtime();
+		$this->assertSame( array( 1, 1, 0 ), $this->sync_counts( $tables ), 'The second sync started before 10 seconds, the third after.' );
+		$this->assertSame( $tables[2][2], Scheduler::next_run( $tables[2][1] ), 'The third table is still due.' );
+
+		delete_transient( 'doing_cron' );
+		$this->http( '/wp-cron.php' );
+		wp_cache_flush_runtime();
+		$this->assertSame( array( 1, 1, 1 ), $this->sync_counts( $tables ) );
+		$this->assertSame( $tables[2][2] + HOUR_IN_SECONDS, Scheduler::next_run( $tables[2][1] ) );
+	}
+
+	public function test_command_line_cron_has_no_time_budget_by_default() {
+		$slow   = $this->fixture( 'slow.csv', self::V1, 'delay=6' );
+		$tables = $this->due_tables( array( $slow, $slow, $this->fixture( 'fast.csv', self::V1 ) ) );
+		$this->assertFalse( $this->run_wp_cron_php() );
+		$this->assertSame( array( 1, 1, 1 ), $this->sync_counts( $tables ), 'PHP on the command line has no time limit; one request syncs all.' );
+	}
+
+	public function test_time_budget_does_not_apply_outside_scheduled_task_requests() {
+		$url = $this->fixture( 's.csv', self::V1 );
+		list( , $first )  = $this->configured_table( $url );
+		list( , $second ) = $this->configured_table( $url );
+		$budget           = static function () {
+			return 0.001;
+		};
+		add_filter( 'tablerefresh_cron_time_budget', $budget );
+		try {
+			$this->run_scheduled( $first );
+			$this->run_scheduled( $second );
+		} finally {
+			remove_filter( 'tablerefresh_cron_time_budget', $budget );
+		}
+		$this->assertSame( 'updated', Sync_Log::last( $first )['outcome'] );
+		$this->assertSame( 'updated', Sync_Log::last( $second )['outcome'] );
+	}
+
+	public function test_deferral_removes_events_of_tables_that_are_no_longer_active() {
+		$url    = $this->fixture( 's.csv', self::V1 );
+		$tables = $this->due_tables( array( $url, $url, $url, $url ) );
+		list( , $disabled ) = $tables[1];
+		list( , $paused )   = $tables[2];
+		list( , $removed )  = $tables[3];
+		Sync_Config::save( $disabled, array( 'enabled' => false ) + Sync_Config::get( $disabled ) );
+		Sync_Config::save( $paused, array( 'attention' => Sync_Config::ATTENTION_CONFLICT ) + Sync_Config::get( $paused ) );
+		Sync_Config::delete( $removed );
+
+		$this->assertFalse( $this->run_wp_cron_php( array( 'TABLEREFRESH_TEST_CRON_BUDGET' => '0.001' ) ) );
+		$this->assertSame( array( 1, 0, 0, 0 ), $this->sync_counts( $tables ) );
+		$this->assertSame( 1, Scheduler::count_events( $tables[0][1] ) );
+		foreach ( array( 'disabled' => $disabled, 'paused' => $paused, 'removed' => $removed ) as $case => $post_id ) {
+			$this->assertSame( 0, Scheduler::count_events( $post_id ), $case );
+		}
+	}
+
+	/**
+	 * Overlapping requests that both defer tables still sync each table once and keep exactly one event.
+	 */
+	public function test_overlapping_cron_requests_with_time_budget_sync_each_table_once() {
+		$tables    = $this->due_tables( array_fill( 0, 4, $this->fixture( 'slow.csv', self::V1, 'delay=1' ) ) );
+		$revisions = array_map(
+			function ( $table ) {
+				return $this->revision_count( $table[0] );
+			},
+			$tables
+		);
+		$env       = array(
+			'TABLEREFRESH_TEST_CRON_BUDGET' => '0.5',
+			'TABLEREFRESH_TEST_BARRIER'     => uniqid( 'cronbudget' ) . ':2', // Both pass WP-Cron's lock check together.
+		);
+		$first     = $this->start_wp_cron_php( $env );
+		$second    = $this->start_wp_cron_php( $env );
+		$this->assertFalse( $this->wait_wp_cron_php( $first ) );
+		$this->assertFalse( $this->wait_wp_cron_php( $second ) );
+
+		unset( $env['TABLEREFRESH_TEST_BARRIER'] );
+		for ( $request = 0; $request < 8 && $this->any_due( $tables ); $request++ ) {
+			$this->run_wp_cron_php( $env );
+		}
+		$this->assertSame( array( 1, 1, 1, 1 ), $this->sync_counts( $tables ) );
+		foreach ( $tables as $i => list( $table_id, $post_id ) ) {
+			$this->assertSame( $revisions[ $i ] + 1, $this->revision_count( $table_id ), "Table {$i} was written once." );
+			$this->assertSame( 1, Scheduler::count_events( $post_id ), "Table {$i} has one event." );
+			$this->assertGreaterThan( time(), Scheduler::next_run( $post_id ) );
+		}
+	}
+
+	/**
+	 * Offsets within the hour of the 24 tables of the overload reproduction (seconds).
+	 */
+	const OVERLOAD_PHASES = array( 2676, 3300, 1260, 2772, 2260, 1216, 2736, 3456, 1272, 3556, 1276, 3480, 2188, 1344, 720, 2020, 2916, 980, 3432, 2244, 820, 588, 304, 2472 );
+
+	/**
+	 * Real time of the last advance_clock() call.
+	 *
+	 * @var int
+	 */
+	private int $clock = 0;
+
+	/**
+	 * Seconds by which advance_clock() has moved the events so far.
+	 *
+	 * @var int
+	 */
+	private int $advanced = 0;
+
+	/**
+	 * Creates configured hourly tables with events at the given offsets from now (negative: due).
+	 *
+	 * @param int[]  $offsets Seconds from now, in table order.
+	 * @param string $url     Source URL.
+	 * @return array<int, array{0: string, 1: int, 2: int}> Table ID, post ID, time of the event.
+	 */
+	private function tables_at( array $offsets, string $url ): array {
+		$this->run_wp_cron_php(); // WordPress's own due events first (see due_tables()).
+		$now    = time();
+		$tables = array();
+		foreach ( $offsets as $offset ) {
+			list( $table_id, $post_id ) = $this->configured_table( $url, 'hourly' );
+			wp_clear_scheduled_hook( Scheduler::HOOK, array( $post_id ) );
+			wp_schedule_event( $now + $offset, 'hourly', Scheduler::HOOK, array( $post_id ) );
+			$tables[] = array( $table_id, $post_id, $now + $offset );
+		}
+		$this->clock    = time();
+		$this->advanced = 0;
+		return $tables;
+	}
+
+	/**
+	 * Lets simulated time pass: moves every event of the tables earlier, so that exactly $seconds
+	 * have passed for them since the last call (real seconds that passed meanwhile count). Asserts
+	 * on the way that each table has exactly one event.
+	 *
+	 * @param array<int, array{0: string, 1: int, 2: int}> $tables  Tables.
+	 * @param int                                          $seconds Simulated seconds.
+	 */
+	private function advance_clock( array $tables, int $seconds ): void {
+		global $wpdb;
+		$now      = time();
+		$shift    = $seconds - ( $now - $this->clock );
+		$post_ids = array_column( $tables, 1 );
+		foreach ( $post_ids as $i => $post_id ) {
+			$this->assertSame( 1, Scheduler::count_events( $post_id ), "Table {$i} has exactly one event." );
+		}
+		// One write of WP-Cron's list (moving the events one by one would take two writes each).
+		$crons = _get_cron_array();
+		$moved = array();
+		foreach ( $crons as $timestamp => $hooks ) {
+			foreach ( isset( $hooks[ Scheduler::HOOK ] ) ? $hooks[ Scheduler::HOOK ] : array() as $key => $event ) {
+				if ( in_array( (int) $event['args'][0], $post_ids, true ) ) {
+					$moved[] = array( $timestamp - $shift, $key, $event );
+					unset( $crons[ $timestamp ][ Scheduler::HOOK ][ $key ] );
+				}
+			}
+			if ( isset( $crons[ $timestamp ][ Scheduler::HOOK ] ) && ! $crons[ $timestamp ][ Scheduler::HOOK ] ) {
+				unset( $crons[ $timestamp ][ Scheduler::HOOK ] );
+			}
+			if ( ! $crons[ $timestamp ] ) {
+				unset( $crons[ $timestamp ] );
+			}
+		}
+		foreach ( $moved as list( $timestamp, $key, $event ) ) {
+			$crons[ $timestamp ][ Scheduler::HOOK ][ $key ] = $event;
+		}
+		uksort( $crons, 'strnatcasecmp' );
+		_set_cron_array( $crons );
+		// The turn markers are due times as well.
+		$wpdb->query( $wpdb->prepare( "UPDATE {$wpdb->postmeta} SET meta_value = CAST(meta_value AS SIGNED) - %d WHERE meta_key = %s AND post_id IN (" . implode( ',', array_map( 'intval', $post_ids ) ) . ')', $shift, Scheduler::TURN_META_KEY ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery
+		foreach ( $post_ids as $post_id ) {
+			wp_cache_delete( $post_id, 'post_meta' );
+		}
+		$this->clock     = $now;
+		$this->advanced += $shift;
+	}
+
+	/**
+	 * Asserts that each table has one event, in the future, at one of its regular times.
+	 *
+	 * @param array<int, array{0: string, 1: int, 2: int}> $tables Tables (with their first event time).
+	 */
+	private function assertRegularTimesKept( array $tables ): void {
+		foreach ( $tables as $i => list( , $post_id, $first ) ) {
+			$this->assertSame( 1, Scheduler::count_events( $post_id ), "Table {$i} has exactly one event." );
+			$next = Scheduler::next_run( $post_id );
+			$this->assertSame( 0, ( $next + $this->advanced - $first ) % HOUR_IN_SECONDS, "Table {$i} keeps its regular times." );
+		}
+	}
+
+	/**
+	 * Runs the due TableRefresh events in this process the way wp-cron.php does (move each event
+	 * to its next time, remove the old one, then run it), as one scheduled-task request.
+	 *
+	 * @param float $budget Time budget of the request (the elapsed time of this process is far beyond it).
+	 */
+	private function run_cron_in_process( float $budget ): void {
+		Closure::bind(
+			static function () {
+				Scheduler::$started   = 0;
+				Scheduler::$due_times = array();
+			},
+			null,
+			Scheduler::class
+		)();
+		$budget_filter = static function () use ( $budget ) {
+			return $budget;
+		};
+		add_filter( 'wp_doing_cron', '__return_true' );
+		add_filter( 'tablerefresh_cron_time_budget', $budget_filter );
+		try {
+			foreach ( wp_get_ready_cron_jobs() as $timestamp => $hooks ) {
+				foreach ( $hooks as $hook => $events ) {
+					if ( Scheduler::HOOK !== $hook ) {
+						continue;
+					}
+					foreach ( $events as $event ) {
+						wp_reschedule_event( $timestamp, $event['schedule'], $hook, $event['args'] );
+						wp_unschedule_event( $timestamp, $hook, $event['args'] );
+						do_action_ref_array( $hook, $event['args'] );
+					}
+				}
+			}
+		} finally {
+			remove_filter( 'wp_doing_cron', '__return_true' );
+			remove_filter( 'tablerefresh_cron_time_budget', $budget_filter );
+		}
+	}
+
+	/**
+	 * Scheduled syncs of each table recorded at or after a time.
+	 *
+	 * @param array<int, array{0: string, 1: int, 2: int}> $tables Tables.
+	 * @param int                                          $since Unix time.
+	 * @return int[]
+	 */
+	private function syncs_since( array $tables, int $since ): array {
+		$counts = array();
+		foreach ( $tables as list( , $post_id ) ) {
+			$counts[] = count(
+				array_filter(
+					Sync_Log::get( $post_id )['entries'],
+					static function ( $entry ) use ( $since ) {
+						return $entry['time'] >= $since && 'scheduled' === $entry['trigger'];
+					}
+				)
+			);
+		}
+		return $counts;
+	}
+
+	/**
+	 * Regression (D1): 24 hourly tables, room for one sync per request, a request every 7.5 minutes
+	 * (8 syncs per hour for 24 due per hour). When a deferred table went back to its latest regular
+	 * time, 10 of the 24 tables were never synchronized again; with the time at which it became due,
+	 * every table gets its share (2 or 3 in 8 hours).
+	 *
+	 * Runs the requests in this process (as wp-cron.php does, see run_cron_in_process()) to keep the
+	 * 128 requests fast; test_minimal_overload_through_wp_cron_php...() uses wp-cron.php itself.
+	 */
+	public function test_sustained_overload_gives_every_table_its_turn() {
+		$tables = $this->tables_at(
+			array_map(
+				static function ( $phase ) {
+					return $phase - 450; // The first request is at simulated second 450.
+				},
+				self::OVERLOAD_PHASES
+			),
+			$this->fixture( 's.csv', self::V1 )
+		);
+		$index  = array();
+		foreach ( $tables as $i => list( $table_id ) ) {
+			$index[ $table_id ] = $i;
+		}
+		$counts   = array_fill( 0, count( $tables ), 0 );
+		$counting = false;
+		$listener = static function ( $table_id ) use ( &$counts, &$counting, $index ) {
+			if ( $counting && isset( $index[ $table_id ] ) ) {
+				++$counts[ $index[ $table_id ] ];
+			}
+		};
+		add_action( 'tablerefresh_sync_completed', $listener );
+		try {
+			for ( $request = 1; $request <= 128; $request++ ) { // 16 simulated hours.
+				$counting = $request > 64; // The last 8 hours.
+				$this->run_cron_in_process( 0.001 );
+				$this->advance_clock( $tables, 450 );
+			}
+		} finally {
+			remove_action( 'tablerefresh_sync_completed', $listener );
+		}
+		$this->assertSame( 64, array_sum( $counts ), 'Every request synchronized one table.' );
+		$this->assertGreaterThanOrEqual( 2, min( $counts ), 'Every table got its turn: ' . implode( ' ', $counts ) );
+		$this->assertLessThanOrEqual( 3, max( $counts ), 'No table got more than its share: ' . implode( ' ', $counts ) );
+		$this->assertRegularTimesKept( $tables );
+	}
+
+	/**
+	 * Regression (D1), smallest case, through wp-cron.php: 4 hourly tables, one sync per request, a
+	 * request every 30 minutes. With the latest regular time, the first table was never synchronized.
+	 */
+	public function test_minimal_overload_through_wp_cron_php_gives_every_table_its_turn() {
+		$tables = $this->tables_at( array( 1615 - 1800, 1072 - 1800, 136 - 1800, 1052 - 1800 ), $this->fixture( 's.csv', self::V1 ) );
+		$env    = array( 'TABLEREFRESH_TEST_CRON_BUDGET' => '0.001' );
+		$since  = PHP_INT_MAX;
+		for ( $request = 1; $request <= 48; $request++ ) { // 24 simulated hours.
+			if ( 25 === $request ) { // The second 12 hours start in a new second: history times are whole seconds.
+				$since = time() + 1;
+				while ( time() < $since ) {
+					usleep( 50000 );
+				}
+			}
+			$this->assertFalse( $this->run_wp_cron_php( $env ) );
+			$this->advance_clock( $tables, 1800 );
+		}
+		$counts = $this->syncs_since( $tables, $since );
+		$this->assertSame( 24, array_sum( $counts ) );
+		$this->assertGreaterThanOrEqual( 5, min( $counts ), 'Every table got its turn: ' . implode( ' ', $counts ) );
+		$this->assertRegularTimesKept( $tables );
+	}
+
+	/**
+	 * A table deferred in several intervals keeps the time at which it first became due, so it runs
+	 * before a table that became due later, even one that was synchronized in between.
+	 */
+	public function test_repeatedly_deferred_table_keeps_its_original_due_time() {
+		$tables = $this->tables_at( array( -600, -599, -598 ), $this->fixture( 's.csv', self::V1 ) );
+		$env    = array( 'TABLEREFRESH_TEST_CRON_BUDGET' => '0.001' );
+		$due    = array_column( $tables, 2 );
+		$event  = static function ( $i ) use ( $tables ) {
+			return Scheduler::next_run( $tables[ $i ][1] );
+		};
+
+		$this->run_wp_cron_php( $env );
+		$this->assertSame( array( 1, 0, 0 ), $this->sync_counts( $tables ) );
+		$this->assertSame( array( $due[1], $due[2] ), array( $event( 1 ), $event( 2 ) ), 'Deferred: back at the time they became due.' );
+
+		$this->advance_clock( $tables, HOUR_IN_SECONDS );
+		$this->run_wp_cron_php( $env );
+		$this->assertSame( array( 1, 1, 0 ), $this->sync_counts( $tables ), 'The table deferred longest of the due ones ran.' );
+		$this->assertSame( $due[2] - $this->advanced, $event( 2 ), 'Deferred again: still at the time it first became due.' );
+		$this->assertSame( $due[0] + HOUR_IN_SECONDS - $this->advanced, $event( 0 ), 'Table 0: back at its regular time of this hour.' );
+
+		$this->advance_clock( $tables, HOUR_IN_SECONDS );
+		$this->run_wp_cron_php( $env );
+		$this->assertSame( array( 1, 1, 1 ), $this->sync_counts( $tables ), 'Table 2, due two hours ago, runs before table 0, due one hour ago.' );
+		$this->assertRegularTimesKept( $tables );
+	}
+
+	/**
+	 * When more syncs are due than one interval can run, the backlog runs first, in the order in
+	 * which the tables became due; once there is room again, every table runs at its regular times.
+	 */
+	public function test_backlog_runs_before_newer_syncs_and_regular_times_resume() {
+		$tables = $this->tables_at( array( -600, -599, -598, -597, -596, -595 ), $this->fixture( 's.csv', self::V1 ) );
+		$env    = array( 'TABLEREFRESH_TEST_CRON_BUDGET' => '0.001' );
+		for ( $request = 0; $request < 3; $request++ ) {
+			$this->run_wp_cron_php( $env );
+		}
+		$this->assertSame( array( 1, 1, 1, 0, 0, 0 ), $this->sync_counts( $tables ), 'Room for three syncs this hour.' );
+
+		$this->advance_clock( $tables, HOUR_IN_SECONDS );
+		$order = array();
+		for ( $request = 0; $request < 6; $request++ ) {
+			$before = $this->sync_counts( $tables );
+			$this->run_wp_cron_php( $env );
+			$after = $this->sync_counts( $tables );
+			$ran   = array_keys( array_diff_assoc( $after, $before ) );
+			$this->assertCount( 1, $ran, 'One sync per request.' );
+			$order[] = $ran[0];
+		}
+		$this->assertSame( array( 3, 4, 5, 0, 1, 2 ), $order, 'The tables that waited since the previous hour first.' );
+
+		$this->advance_clock( $tables, HOUR_IN_SECONDS );
+		$this->assertFalse( $this->run_wp_cron_php() ); // Enough room again (command line: no budget).
+		$this->assertSame( array( 3, 3, 3, 2, 2, 2 ), $this->sync_counts( $tables ), 'Every table once more, at its regular time.' );
+		$this->assertRegularTimesKept( $tables );
+		foreach ( $tables as list( , $post_id ) ) {
+			$this->assertGreaterThan( time(), Scheduler::next_run( $post_id ) );
+		}
+	}
+
+	public function test_frequency_change_while_a_table_is_deferred() {
+		$tables = $this->tables_at( array( -600, -599, -598 ), $this->fixture( 's.csv', self::V1 ) );
+		$env    = array( 'TABLEREFRESH_TEST_CRON_BUDGET' => '0.001' );
+		$this->run_wp_cron_php( $env );
+		list( , $saved )   = $tables[1];
+		list( , $changed ) = $tables[2];
+		$this->assertLessThanOrEqual( time(), Scheduler::next_run( $saved ), 'Deferred.' );
+
+		// Saved in the admin screen: the schedule restarts with the new frequency.
+		Sync_Config::save( $saved, array( 'frequency' => 'daily' ) + Sync_Config::get( $saved ) );
+		Scheduler::apply( $saved, Sync_Config::get( $saved ), true );
+		// Changed by another process after the cron request loaded the event (the event is still hourly).
+		Sync_Config::save( $changed, array( 'frequency' => 'daily' ) + Sync_Config::get( $changed ) );
+
+		$this->advance_clock( array( $tables[0] ), HOUR_IN_SECONDS + 100 ); // Table 0 is due again, before table 2.
+		$this->run_wp_cron_php( $env );
+		$this->assertSame( array( 2, 0, 0 ), $this->sync_counts( $tables ) );
+		$this->assertSame( 1, Scheduler::count_events( $saved ) );
+		$this->assertSame( 'daily', wp_get_scheduled_event( Scheduler::HOOK, array( $saved ) )->schedule );
+		$this->assertGreaterThan( time() + DAY_IN_SECONDS - 120, Scheduler::next_run( $saved ), 'Not due before its new interval.' );
+		$this->assertSame( 1, Scheduler::count_events( $changed ) );
+		$this->assertSame( 'daily', wp_get_scheduled_event( Scheduler::HOOK, array( $changed ) )->schedule, 'Deferred with the configured frequency.' );
+		$this->assertLessThanOrEqual( time(), Scheduler::next_run( $changed ), 'Still due.' );
+
+		$this->run_wp_cron_php( $env );
+		$this->assertSame( array( 2, 0, 1 ), $this->sync_counts( $tables ) );
+		$this->assertGreaterThan( time() + DAY_IN_SECONDS - 120, Scheduler::next_run( $changed ) );
+	}
+
+	/**
+	 * Overlapping requests over several intervals: every table once per interval, one event each.
+	 *
+	 * (The runner that finds a table busy may restart that table's interval when its copy of WP-Cron's
+	 * list is outdated, see run(), so regular times are not compared here.)
+	 */
+	public function test_overlapping_cron_requests_across_intervals() {
+		$tables = $this->tables_at( array( -600, -599, -598, -597 ), $this->fixture( 's.csv', self::V1, 'delay=0.5' ) );
+		for ( $interval = 1; $interval <= 2; $interval++ ) {
+			$env    = array(
+				'TABLEREFRESH_TEST_CRON_BUDGET' => '0.001',
+				'TABLEREFRESH_TEST_BARRIER'     => uniqid( 'overlap' ) . ':2',
+			);
+			$first  = $this->start_wp_cron_php( $env );
+			$second = $this->start_wp_cron_php( $env );
+			$this->assertFalse( $this->wait_wp_cron_php( $first ) );
+			$this->assertFalse( $this->wait_wp_cron_php( $second ) );
+			unset( $env['TABLEREFRESH_TEST_BARRIER'] );
+			for ( $request = 0; $request < 8 && $this->any_due( $tables ); $request++ ) {
+				$this->run_wp_cron_php( $env );
+			}
+			$this->assertSame( array_fill( 0, 4, $interval ), $this->sync_counts( $tables ), "Interval {$interval}." );
+			foreach ( $tables as $i => list( $table_id, $post_id ) ) {
+				$this->assertSame( 1, Scheduler::count_events( $post_id ), "Interval {$interval}, table {$i}: one event." );
+				$this->assertGreaterThan( time(), Scheduler::next_run( $post_id ) );
+				$this->assertFalse( Table_Lock::is_locked( $table_id ) );
+			}
+			$this->advance_clock( $tables, HOUR_IN_SECONDS + 100 ); // Due again even after a restarted interval.
+		}
+	}
+
+	/**
+	 * A request that ends during a sync (here in the middle of writing the table) uses up that table's
+	 * turn: the table runs at its next regular time and is recovered then. The deferred tables keep
+	 * their place, and the next request continues with them.
+	 */
+	public function test_interrupted_request_keeps_the_deferred_tables_and_recovers_the_table() {
+		$tables = $this->tables_at( array( -600, -599, -598 ), $this->fixture( 's.csv', self::V1 ) );
+		$env    = array(
+			'TABLEREFRESH_TEST_CRON_BUDGET' => '0.001',
+			'TABLEREFRESH_TEST_LOCK_TTL'    => '3',
+		);
+		$this->run_wp_cron_php( $env );
+		list( $killed_table, $killed ) = $tables[1];
+
+		$this->run_wp_cron_php( $env + array( 'TABLEREFRESH_TEST_FAULT' => 'kill_after_post_update' ) );
+		$this->assertSame( array( 1, 0, 0 ), $this->sync_counts( $tables ), 'Nothing recorded for the interrupted sync.' );
+		$this->assertSame( 'initial', $this->load_table( $killed_table )['data'][0][0], 'The interrupted write was rolled back.' );
+		$this->assertNotNull( \TableRefresh\Journal::read( $killed_table ) );
+		$this->assertGreaterThan( time(), Scheduler::next_run( $killed ), 'Its turn is used up: next regular time.' );
+		$this->assertSame( $tables[2][2], Scheduler::next_run( $tables[2][1] ), 'The deferred table keeps its place.' );
+
+		$this->run_wp_cron_php( $env );
+		$this->assertSame( array( 1, 0, 1 ), $this->sync_counts( $tables ), 'The next request continues with the deferred table.' );
+
+		for ( $wait = 0; $wait < 100 && Table_Lock::is_locked( $killed_table ); $wait++ ) {
+			usleep( 100000 ); // The lock of the killed process expires.
+		}
+		$this->advance_clock( $tables, HOUR_IN_SECONDS );
+		for ( $request = 0; $request < 4 && $this->any_due( $tables ); $request++ ) {
+			$this->run_wp_cron_php( $env );
+		}
+		$this->assertSame( array( 2, 1, 2 ), $this->sync_counts( $tables ) );
+		$this->assertSame( 'updated', Sync_Log::last( $killed )['outcome'] );
+		$this->assertSame( 'Item', $this->load_table( $killed_table )['data'][0][0] );
+		$this->assertNull( \TableRefresh\Journal::read( $killed_table ), 'Recovered.' );
+		$this->assertRegularTimesKept( $tables );
+	}
+
+	/**
+	 * Regression: two overlapping requests start from the same list of due events. Request A synchronizes
+	 * table 1; request B, over its budget, reaches table 1 afterwards. B must not hand table 1 back to
+	 * the next request (it would be synchronized once more), whether A is still running or has finished.
+	 */
+	public function test_overlapping_request_does_not_hand_back_a_turn_already_taken() {
+		$tables = $this->tables_at( array( -600, -599 ), $this->fixture( 's.csv', self::V1 ) );
+		list( , $taken ) = $tables[1];
+		wp_load_alloptions(); // Request B's copy of WP-Cron's list: both tables due.
+
+		$this->wait_wp_cron_php( $this->start_wp_cron_php(), 0, false ); // Request A runs both tables.
+		wp_cache_delete( $tables[0][1], 'post_meta' ); // B has not read the tables' meta yet.
+		wp_cache_delete( $taken, 'post_meta' );
+		$this->run_cron_in_process( 0.001 ); // Request B, from its outdated list: table 0, then table 1.
+
+		wp_cache_flush_runtime();
+		$this->assertSame( 1, count( Sync_Log::get( $taken )['entries'] ), 'Synchronized once, by request A.' );
+		$this->assertSame( 1, Scheduler::count_events( $taken ) );
+		$this->assertGreaterThan( time(), Scheduler::next_run( $taken ), 'Not handed back: next regular time.' );
+		$this->assertSame( $tables[1][2] + HOUR_IN_SECONDS, Scheduler::next_run( $taken ) );
+	}
+
+	public function test_deferral_never_leaves_a_table_without_an_event_or_with_two() {
+		$tables = $this->tables_at( array( -600, -599, -598 ), $this->fixture( 's.csv', self::V1 ) );
+		$env    = array( 'TABLEREFRESH_TEST_CRON_BUDGET' => '0.001' );
+
+		// A duplicate left by an earlier race: the deferral replaces both events with one, due now.
+		list( , $duplicate ) = $tables[2];
+		wp_schedule_event( time() + 1800, 'hourly', Scheduler::HOOK, array( $duplicate ) );
+		$this->assertSame( 2, Scheduler::count_events( $duplicate ) );
+		$this->run_wp_cron_php( $env );
+		$this->assertSame( 1, Scheduler::count_events( $duplicate ) );
+		$this->assertLessThanOrEqual( time(), Scheduler::next_run( $duplicate ) );
+
+		// The process ends in the middle of a deferral (table 1 runs first, table 2 is deferred): the
+		// table keeps an event, here two.
+		$this->run_wp_cron_php( $env + array( 'TABLEREFRESH_TEST_FAULT' => 'kill_during_deferral' ) );
+		$this->assertSame( array( 1, 1, 0 ), $this->sync_counts( $tables ) );
+		$this->assertGreaterThanOrEqual( 1, Scheduler::count_events( $duplicate ), 'Never no event.' );
+		$this->assertLessThanOrEqual( time(), Scheduler::next_run( $duplicate ), 'Still due.' );
+
+		// The next requests repair it: one event per table, every table synchronized.
+		for ( $request = 0; $request < 4 && $this->any_due( $tables ); $request++ ) {
+			$this->run_wp_cron_php( $env );
+		}
+		$this->assertSame( array( 1, 1, 1 ), $this->sync_counts( $tables ) );
+		foreach ( $tables as $i => list( , $post_id ) ) {
+			$this->assertSame( 1, Scheduler::count_events( $post_id ), "Table {$i}." );
+		}
+	}
+
+	/**
+	 * Regression: when the event is not what WP-Cron leaves behind (here: the frequency was changed
+	 * meanwhile), the deferral removed the events before it added the new one. A process that ended in
+	 * between left an active table without any event, and nothing scheduled it again.
+	 */
+	public function test_interrupted_replacement_of_an_unexpected_event_never_leaves_a_table_without_an_event() {
+		$tables = $this->tables_at( array( -600, -599, -598 ), $this->fixture( 's.csv', self::V1 ) );
+		$env    = array( 'TABLEREFRESH_TEST_CRON_BUDGET' => '0.001' );
+		list( , $changed ) = $tables[1];
+		Sync_Config::save( $changed, array( 'frequency' => 'daily' ) + Sync_Config::get( $changed ) ); // The event is still hourly.
+
+		// Table 0 runs; the process ends at the first change of WP-Cron's list while table 1 is deferred.
+		$this->run_wp_cron_php( $env + array( 'TABLEREFRESH_TEST_FAULT' => 'kill_during_deferral' ) );
+		$this->assertSame( array( 1, 0, 0 ), $this->sync_counts( $tables ) );
+		$this->assertGreaterThanOrEqual( 1, Scheduler::count_events( $changed ), 'Never no event.' );
+		$this->assertLessThanOrEqual( time(), Scheduler::next_run( $changed ), 'Still due.' );
+
+		for ( $request = 0; $request < 4 && $this->any_due( $tables ); $request++ ) {
+			$this->run_wp_cron_php( $env );
+		}
+		$this->assertSame( array( 1, 1, 1 ), $this->sync_counts( $tables ) );
+		foreach ( $tables as $i => list( , $post_id ) ) {
+			$this->assertSame( 1, Scheduler::count_events( $post_id ), "Table {$i}." );
+			$this->assertGreaterThan( time(), Scheduler::next_run( $post_id ) );
+		}
+		$this->assertSame( 'daily', wp_get_scheduled_event( Scheduler::HOOK, array( $changed ) )->schedule );
+	}
+
+	/**
+	 * An event that cannot be scheduled (here: another plugin's filter refuses it) must not cost the
+	 * table the event it has.
+	 */
+	public function test_deferral_that_cannot_schedule_keeps_the_existing_event() {
+		$tables = $this->tables_at( array( -600, -599 ), $this->fixture( 's.csv', self::V1 ) );
+		list( , $post_id ) = $tables[1];
+		$refuse            = static function ( $event ) {
+			return $event && Scheduler::HOOK === $event->hook && doing_action( Scheduler::HOOK ) ? false : $event;
+		};
+		add_filter( 'schedule_event', $refuse );
+		try {
+			$this->run_cron_in_process( 0.001 );
+		} finally {
+			remove_filter( 'schedule_event', $refuse );
+		}
+		$this->assertSame( array( 1, 0 ), $this->sync_counts( $tables ) );
+		$this->assertSame( 1, Scheduler::count_events( $post_id ), 'The event that WP-Cron left stays.' );
+		$this->assertGreaterThan( time(), Scheduler::next_run( $post_id ) );
+		wp_cache_flush_runtime();
+		$this->assertSame( 1, Scheduler::count_events( $post_id ), 'Also in the database.' );
+	}
+
+	/**
+	 * Regression: two overlapping requests defer the same table at the same moment. The second request's
+	 * write of WP-Cron's list is identical to the first one's and changes no row, so update_option()
+	 * leaves the second request's copy without the new event; removing the old event from that copy
+	 * then stored a list without any event of the table.
+	 */
+	public function test_deferral_survives_an_identical_write_by_an_overlapping_request() {
+		global $wpdb;
+		$tables = $this->tables_at( array( -600, -599 ), $this->fixture( 's.csv', self::V1 ) );
+		list( , $post_id, $due ) = $tables[1];
+		$writes                  = 0;
+		// The other request: stores the same list right before this request's first write of the deferral.
+		$other = static function ( $option, $old_value, $value ) use ( &$writes, $wpdb ) {
+			if ( 'cron' === $option && doing_action( Scheduler::HOOK ) && 1 === ++$writes ) {
+				$wpdb->update( $wpdb->options, array( 'option_value' => maybe_serialize( $value ) ), array( 'option_name' => 'cron' ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			}
+		};
+		add_action( 'update_option', $other, 10, 3 );
+		try {
+			$this->run_cron_in_process( 0.001 );
+		} finally {
+			remove_action( 'update_option', $other );
+		}
+		$this->assertGreaterThanOrEqual( 1, $writes, 'The deferral wrote WP-Cron\'s list.' );
+		$this->assertSame( 1, Scheduler::count_events( $post_id ), 'In this request\'s copy.' );
+		wp_cache_flush_runtime();
+		$this->assertSame( array( 1, 0 ), $this->sync_counts( $tables ) );
+		$this->assertSame( 1, Scheduler::count_events( $post_id ), 'In the database.' );
+		$this->assertSame( $due, Scheduler::next_run( $post_id ), 'Deferred: back at the time it became due.' );
+	}
+
+	/**
+	 * Regression: a turn marker ahead of the clock (the server clock was set back, or the value comes
+	 * from a server whose clock was ahead) made every deferral of the table look like a turn already
+	 * taken. With room for one sync per request, the table was never synchronized.
+	 */
+	public function test_turn_marker_ahead_of_the_clock_does_not_keep_a_table_waiting() {
+		// A marker from a clock that was ahead.
+		$tables = $this->tables_at( array( -600, -599, -598 ), $this->fixture( 's.csv', self::V1 ) );
+		list( , $ahead, $due ) = $tables[2];
+		update_post_meta( $ahead, Scheduler::TURN_META_KEY, time() + DAY_IN_SECONDS );
+		$this->run_cron_in_process( 0.001 );
+		$this->assertSame( array( 1, 0, 0 ), $this->sync_counts( $tables ) );
+		$this->assertSame( $due, Scheduler::next_run( $ahead ), 'Handed to the next request.' );
+		$this->assertSame( '', get_post_meta( $ahead, Scheduler::TURN_META_KEY, true ), 'The impossible marker is gone.' );
+		$this->run_cron_in_process( 0.001 );
+		$this->run_cron_in_process( 0.001 );
+		$this->assertSame( array( 1, 1, 1 ), $this->sync_counts( $tables ) );
+		$this->assertSame( (string) $due, get_post_meta( $ahead, Scheduler::TURN_META_KEY, true ), 'The turn taken.' );
+
+		// The server clock is set back by five hours after every table took its turn; then the schedules
+		// are started anew (settings saved again), so the tables are due before their old markers.
+		$this->advance_clock( $tables, -5 * HOUR_IN_SECONDS );
+		foreach ( $tables as list( , $post_id ) ) {
+			$this->assertGreaterThan( time() + 4 * HOUR_IN_SECONDS, (int) get_post_meta( $post_id, Scheduler::TURN_META_KEY, true ) );
+			Scheduler::apply( $post_id, Sync_Config::get( $post_id ), true );
+		}
+		$this->advance_clock( $tables, HOUR_IN_SECONDS + 10 );
+		for ( $request = 0; $request < 3; $request++ ) {
+			$this->run_cron_in_process( 0.001 );
+		}
+		$this->assertSame( array( 2, 2, 2 ), $this->sync_counts( $tables ), 'Every table got its turn.' );
+		foreach ( $tables as list( , $post_id ) ) {
+			$this->assertLessThanOrEqual( time(), (int) get_post_meta( $post_id, Scheduler::TURN_META_KEY, true ) );
+			$this->assertSame( 1, Scheduler::count_events( $post_id ) );
+		}
+	}
+
+	public function test_turn_marker_is_removed_with_the_configuration_and_not_written_for_other_posts() {
+		global $wpdb;
+		$tables = $this->tables_at( array( -600 ), $this->fixture( 's.csv', self::V1 ) );
+		list( , $post_id, $due ) = $tables[0];
+		$deleted                 = 999999999; // An event that outlived its table.
+		wp_schedule_event( time() - 500, 'hourly', Scheduler::HOOK, array( $deleted ) );
+		try {
+			$this->run_cron_in_process( 0 );
+			$this->assertSame( (string) $due, get_post_meta( $post_id, Scheduler::TURN_META_KEY, true ) );
+			$this->assertSame( 0, (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$wpdb->postmeta} WHERE post_id = %d", $deleted ) ), 'No meta for a post that does not exist.' );
+			$this->assertSame( 0, Scheduler::count_events( $deleted ) );
+		} finally {
+			wp_clear_scheduled_hook( Scheduler::HOOK, array( $deleted ) );
+			$wpdb->delete( $wpdb->postmeta, array( 'post_id' => $deleted ) );
+		}
+
+		// "Remove sync setup" in the admin screen.
+		Sync_Config::delete( $post_id );
+		Scheduler::apply( $post_id, null );
+		$this->assertSame( 0, (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$wpdb->postmeta} WHERE post_id = %d AND meta_key = %s", $post_id, Scheduler::TURN_META_KEY ) ) );
 	}
 
 	public function test_uninstall_removes_tablerefresh_data_but_not_the_table() {
