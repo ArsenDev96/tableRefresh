@@ -1237,18 +1237,43 @@ class ScheduledSyncTest extends Integration_Test_Case {
 		}
 	}
 
+	/**
+	 * The runner removes the scheduler's meta of a post without a configuration right after the
+	 * scheduler started it, so the final state alone cannot show a turn marker written for such a
+	 * post: every write of the marker is recorded.
+	 */
 	public function test_turn_marker_is_removed_with_the_configuration_and_not_written_for_other_posts() {
 		global $wpdb;
 		$tables = $this->tables_at( array( -600 ), $this->fixture( 's.csv', self::V1 ) );
 		list( , $post_id, $due ) = $tables[0];
-		$deleted                 = 999999999; // An event that outlived its table.
+		$deleted                 = 999999999; // An event that outlived its table; due as well.
 		wp_schedule_event( time() - 500, 'hourly', Scheduler::HOOK, array( $deleted ) );
+		$ran        = array();
+		$written    = array();
+		$note_run   = static function ( $id ) use ( &$ran ) {
+			$ran[] = (int) $id;
+		};
+		$note_write = static function ( $meta_id, $object_id, $meta_key ) use ( &$written ) {
+			if ( Scheduler::TURN_META_KEY === $meta_key ) {
+				$written[] = (int) $object_id;
+			}
+		};
+		add_action( Scheduler::HOOK, $note_run, 0 );
+		add_action( 'added_post_meta', $note_write, 10, 3 );
+		add_action( 'updated_post_meta', $note_write, 10, 3 );
 		try {
-			$this->run_cron_in_process( 0 );
+			$this->run_cron_in_process( 0 ); // No time budget: both events reach Scheduler::run(), none is deferred.
+			$this->assertContains( $post_id, $ran );
+			$this->assertContains( $deleted, $ran, 'The event of the post without a configuration ran.' );
+			$this->assertContains( $post_id, $written );
+			$this->assertNotContains( $deleted, $written, 'No turn marker for a post without a configuration, not even until the runner removes it.' );
 			$this->assertSame( (string) $due, get_post_meta( $post_id, Scheduler::TURN_META_KEY, true ) );
 			$this->assertSame( 0, (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$wpdb->postmeta} WHERE post_id = %d", $deleted ) ), 'No meta for a post that does not exist.' );
 			$this->assertSame( 0, Scheduler::count_events( $deleted ) );
 		} finally {
+			remove_action( Scheduler::HOOK, $note_run, 0 );
+			remove_action( 'added_post_meta', $note_write, 10 );
+			remove_action( 'updated_post_meta', $note_write, 10 );
 			wp_clear_scheduled_hook( Scheduler::HOOK, array( $deleted ) );
 			$wpdb->delete( $wpdb->postmeta, array( 'post_id' => $deleted ) );
 		}
@@ -1257,6 +1282,22 @@ class ScheduledSyncTest extends Integration_Test_Case {
 		Sync_Config::delete( $post_id );
 		Scheduler::apply( $post_id, null );
 		$this->assertSame( 0, (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$wpdb->postmeta} WHERE post_id = %d AND meta_key = %s", $post_id, Scheduler::TURN_META_KEY ) ) );
+	}
+
+	/**
+	 * `wp cron event run` runs an event at once, also one that is not due yet. That is no turn of the
+	 * table's schedule: a turn marker would hold a time that has not come yet.
+	 */
+	public function test_turn_marker_is_not_written_for_an_event_run_before_it_is_due() {
+		list( , $post_id ) = $this->configured_table( $this->fixture( 's.csv', self::V1 ), 'hourly' );
+		wp_clear_scheduled_hook( Scheduler::HOOK, array( $post_id ) );
+		wp_schedule_event( time() + 600, 'hourly', Scheduler::HOOK, array( $post_id ) ); // Not due yet.
+
+		$output = shell_exec( 'wp --path=' . escapeshellarg( TABLEREFRESH_TESTS_WP_DIR ) . ' cron event run ' . Scheduler::HOOK . ' 2>&1' );
+		$this->assertStringContainsString( 'Executed', (string) $output );
+		wp_cache_flush_runtime(); // The other process changed the cron option and post meta.
+		$this->assertSame( 'scheduled', Sync_Log::last( $post_id )['trigger'], 'The sync ran.' );
+		$this->assertSame( '', get_post_meta( $post_id, Scheduler::TURN_META_KEY, true ) );
 	}
 
 	public function test_uninstall_removes_tablerefresh_data_but_not_the_table() {
