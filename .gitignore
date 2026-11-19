@@ -4,6 +4,8 @@
 /dev/fixtures/data/*
 !/dev/fixtures/data/.gitkeep
 .phpunit.result.cache
+# Lock and backup of dev/mutation-check.sh while it runs (see dev/README.md: Mutation check).
+/dev/.mutation-state/
 
 # Release builds (dev/build-zip.sh).
 /dist/

@@ -10,7 +10,8 @@ sh dev/run-tests.sh --group engine       # converts wp_posts/wp_postmeta to MyIS
 sh dev/run-tests.sh --group external     # live Google Sheets (internet)
 sh dev/redis.sh enable                   # persistent object cache; PersistentCacheTest runs only then
 sh dev/redis.sh disable
-sh dev/mutation-check.sh                 # disables each protection; the tests must notice (Python: host, else fixtures container)
+sh dev/mutation-check.sh                 # disables each protection; the tests must notice (see "Mutation check")
+sh dev/mutation-check.sh --scheduler     # only the 18 scheduler mutations; --list shows a selection
 sh dev/test-matrix.sh db                 # MariaDB 10.11/11.4, MySQL 5.7/8.0/8.4
 sh dev/test-matrix.sh tablepress 3.0 3.4.1   # TablePress releases from wordpress.org
 sh dev/test-matrix.sh wp 6.7.10 7.1.3        # WordPress versions
@@ -47,3 +48,35 @@ docker compose -f dev/docker-compose.yml run --rm cli wp tablerefresh sync 1 htt
   runs on page visits as on a real site. `wp cron test` fails on both: WP-CLI runs in the separate `cli` container.
   Every WP-CLI command also attempts a spawn there and sets WordPress's 60-second `doing_cron` lock, so a page visit
   right after a WP-CLI command does not start WP-Cron.
+
+## Mutation check
+
+`dev/mutation-check.sh` replaces one exact snippet in a plugin file at a time, runs the tests named for it, and
+restores the file. Options: `--scheduler` (the scheduler mutations only; the script refuses to run if their number
+is not the expected 18), `--match REGEX` (descriptions), `--list` (show the selection, run nothing), `--recover`.
+Replacements run in Python: on the host if it has one, else in the fixtures container.
+
+- First the selected tests run once without mutation (baseline). If they do not pass, no mutation runs.
+- Results come from PHPUnit's JUnit report and exit status, not from the text output:
+  **CAUGHT** = the tests ran and an assertion failed; **SURVIVED** = every selected test ran and passed;
+  **ERROR** = inconclusive (snippet not found exactly once, Docker or PHPUnit failure, PHP fatal error, no test
+  matched the filter, test errors such as exceptions instead of assertion failures, warnings, or skipped tests).
+- The summary lists selected, executed, caught, survived, errors and incomplete mutations, and whether every plugin
+  file is byte-identical to the start of the run. Exit status 0 (PASS) only if all selected mutations were caught;
+  1 (FAIL) otherwise; 2 if the run refused to start; 130/143/129 after Ctrl+C, SIGTERM or SIGHUP.
+- Logs of each run (test output, the applied diff, JUnit reports) go to `/tmp/tablerefresh-mutation-*`.
+- Some mutations are caught only in a specific setup, as their descriptions say (Redis enabled, `CLI_SERVICE=cli74`).
+  Elsewhere their tests are skipped or pass, which reports ERROR or SURVIVED.
+
+Safety: only one run at a time; the lock directory `dev/.mutation-state` (ignored by Git) also holds the backup of
+the file being mutated, never the plugin directory. On normal exit, errors, Ctrl+C, SIGTERM and SIGHUP the script
+stops the running test, including its Docker container (killing the `docker compose run` client alone leaves the
+container running against the database), and restores the file, unless the file was changed by someone else during
+the run: then it leaves the file as it is and prints how to compare it with the original.
+
+A run killed with SIGKILL (Task Manager, `taskkill /F`, a tool's timeout), a crash or a power loss cannot clean up:
+the file may stay mutated and its test container may keep running. The next run refuses to start. Then run
+`sh dev/mutation-check.sh --recover`: it removes the project's running `docker compose run` containers, restores the
+file if it still holds exactly the original or the mutation, restarts Apache (OPcache), and removes the lock.
+Backups named `*.orig` next to plugin files come from the earlier version of the script; it refuses to start
+while they exist (compare with `diff -u FILE.orig FILE`, then `mv FILE.orig FILE`).
