@@ -9,7 +9,7 @@
  * @group engine
  */
 
-use TableRefresh\Table_Updater;
+use ArsenManukyan\TableRefresh\Table_Updater;
 
 /**
  * @group engine

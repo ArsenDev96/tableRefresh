@@ -11,7 +11,7 @@
  * @package TableRefresh
  */
 
-namespace TableRefresh;
+namespace ArsenManukyan\TableRefresh;
 
 use WP_Error;
 

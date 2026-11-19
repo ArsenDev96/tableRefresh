@@ -1,28 +1,34 @@
-# Handoff – 2026-11-19 (office → home, 1.0.1 scheduler work in progress)
+# Handoff – 2026-11-20 (1.0.1 scheduler work, RC6 integrated, not for release yet)
 
-## 1.0.1 scheduler work (branch `scheduler-1.0.1-hardening`, NOT verified, not for release yet)
+## 1.0.1 scheduler work (branch `scheduler-1.0.1-hardening`, not for release yet)
 
 - Branch `scheduler-1.0.1-hardening` holds the scheduler time budget for 1.0.1 (a web cron request starts no
   further sync after 10 s; deferred tables keep the time they became due) plus the hardening from the independent
-  review of 2026-11-19. `main` is unchanged (RC5 state). Version is still 1.0.0: no bump, no changelog entry, no ZIP.
+  review of 2026-11-19. Version is still 1.0.0: no bump, no changelog entry, no ZIP.
+- The branch started from RC5 (`f4cffc5`). Published 1.0.0 = RC6 = `f269c27` (WordPress.org's
+  tablerefresh.1.0.0.zip: all 25 files byte-identical to it). On 2026-11-20 `rc6-wporg-review` (`6048407`) was
+  merged in: vendor namespace `ArsenManukyan\TableRefresh`, dependency notice only on Plugins, uninstall removes
+  the notice transients, IdentifiersTest and notice/uninstall tests, the four RC6 mutations (now 65 in all, 18 of
+  them scheduler). `main` is still at RC5 (`f4cffc5`); it does not contain the published 1.0.0.
 - Hardening done (`class-scheduler.php`): `place_event()` adds the new event before it removes the others and only
   after the add is confirmed, re-reads WP-Cron's list after a write that failed or changed no row, checks the result
   and repairs once; used by `defer()` (both branches) and `apply()`. A `_tablerefresh_turn` marker later than now is
   ignored and deleted; `run()` writes it only for a configured table and a due time that has passed; `apply()` with
   no configuration deletes it. Readme: a cron job that requests wp-cron.php over HTTP has the web limit.
-- Checked on this branch: `ScheduledSyncTest` on PHP 8.3 = 38 tests, 4389 assertions, OK (5 new regression tests);
-  PHPCS on the plugin clean; PHP 7.4 lint of the scheduler OK.
-- NOT done yet, in this order (one Docker run at a time):
-  1. Scheduler mutations: `sh dev/mutation-check.sh` (18 scheduler mutations, 8 new or changed; never completed).
-  2. `sh dev/run-tests.sh` (full suite, PHP 8.3), then `CLI_SERVICE=cli74 sh dev/run-tests.sh`.
-  3. `sh dev/test-matrix.sh wp 6.7.10` (minimum WordPress version).
+- Before the RC6 merge (RC5 base, so they do not count for the merged code): 18/18 scheduler mutations caught
+  (`9238223`), WordPress 6.7.10 matrix OK (`9238223`, 268 tests).
+- After the RC6 merge: see "Checks after the RC6 merge" below.
+- NOT done yet, in this order (one Docker run at a time), all on the merged code:
+  1. Full mutation check `sh dev/mutation-check.sh` (65), plus the cli74-only mutation with `CLI_SERVICE=cli74`.
+  2. `sh dev/run-tests.sh` (full suite, PHP 8.3), then `CLI_SERVICE=cli74 sh dev/run-tests.sh`, Redis enabled too.
+  3. Matrices (`dev/test-matrix.sh`: wp 6.7.10, tablepress 3.0, php 8.4, db), Plugin Check on an installed build,
+     RC5/1.0.0 -> 1.0.1 upgrade check, browser workflow.
   4. Final report and verdict; then version 1.0.1, changelog, upgrade notice (owner's decision).
-- Careful: stopping `mutation-check.sh` from outside can leave it running; it then keeps mutating
-  `class-scheduler.php`. Kill the `sh` processes, then `mv class-scheduler.php.orig class-scheduler.php` if the
-  `.orig` file exists, and restart the `wordpress` container.
+- `dev/mutation-check.sh` cleans up after Ctrl+C/SIGTERM itself; after a hard kill run
+  `sh dev/mutation-check.sh --recover` (see dev/README.md).
 - The dev site here ran with TablePress 3.5 (readme says tested with 3.0 and 3.4.1).
 
-# Handoff – 2026-10-28 (home computer, after RC5)
+# Handoff – 2026-11-01 (home computer, after RC6)
 
 ## Where things stand
 
@@ -103,9 +109,22 @@
   `dev/release-checks/rc5-results/focused-verification.txt`.
 - At submission: WordPress.org derives the slug from the name; request `tablerefresh` (text domain) before approval.
 
+## RC6 (2026-11-01): WordPress.org review "Pending corrections"
+
+- Submitted RC5 on 2026-10-28; slug `tablerefresh` assigned. Review AUTOPREREVIEW tablerefresh/arsenmanukyan/1Nov26/T1:
+  A. distinctive prefixes (namespace `TableRefresh`, `wp_schedule_event` in class-scheduler.php:73); B. Guideline 11
+  (possible dashboard hijacking through notices).
+- Fixes on the local branch `rc6-wporg-review` (not pushed, not merged): namespace `ArsenManukyan\TableRefresh`
+  (reviewer's example); the "requires TablePress" notice only on the Plugins screen (was on every admin screen);
+  uninstall also removes the notice transients. Stored names, hooks, handles, constants, CLI command keep the slug
+  prefix `tablerefresh`, so the RC5 -> RC6 upgrade needs no migration (verified).
+- RC6 = `f269c27` (not tagged). ZIP: `sh dev/build-zip.sh f269c27 rc6`, 25 files,
+  SHA-256 `28f5329e6d9b9e486435742725689059c18366039de890b7427d775c0d9b3085`. Checks:
+  `dev/release-checks/rc6-results/focused-verification.txt`. Draft reply to the reviewer: in the owner's notes.
+
 ## Remaining
 
-1. Owner review of RC5; WordPress.org submission only with explicit approval.
+1. Owner review of RC6; upload to WordPress.org and reply to the review only with explicit approval.
 2. Optional: deferred matrices (TablePress 3.1–3.4, MySQL 8.x); screen-reader pass.
 
 ## Tools

@@ -68,7 +68,7 @@ const sleep = ( ms ) => new Promise( ( r ) => setTimeout( r, ms ) );
 	await page.click( 'label[for="inspector-checkbox-control-2"]' ); // An option that is off by default.
 	await page.evaluate( () => [ ...document.querySelectorAll( 'button' ) ].find( ( b ) => 'Save Changes' === b.textContent.trim() ).click() );
 	await sleep( 3000 );
-	const optionsBefore = wp( `echo get_post_meta( TableRefresh\\TablePress_Adapter::get_post_id( '${ tableId }' ), '_tablepress_table_options', true );` );
+	const optionsBefore = wp( `echo get_post_meta( ArsenManukyan\\TableRefresh\\TablePress_Adapter::get_post_id( '${ tableId }' ), '_tablepress_table_options', true );` );
 	const pageId = execFileSync( 'C:\\Program Files\\Git\\bin\\bash.exe', [ '-c', `cd "${ REPO }" && sh dev/rc-env.sh wp post create --post_type=page --post_status=publish --post_title=Roster --post_content='[table id=${ tableId } /]' --porcelain 2>/dev/null | tail -1` ], { encoding: 'utf8' } ).trim();
 
 	// 3. Connect the public Google Sheet and run the first sync.
@@ -85,7 +85,7 @@ const sleep = ( ms ) => new Promise( ( r ) => setTimeout( r, ms ) );
 	let body = await text();
 	check( /Class roster: The table was updated: 31 rows, 6 columns/.test( body ), 'first sync from Google Sheets', body.split( '\n' ).find( ( l ) => l.includes( 'Class roster:' ) ) );
 	await shot( '03-list-after-setup' );
-	const postId = wp( `echo TableRefresh\\TablePress_Adapter::get_post_id( '${ tableId }' );` );
+	const postId = wp( `echo ArsenManukyan\\TableRefresh\\TablePress_Adapter::get_post_id( '${ tableId }' );` );
 
 	// The page with the shortcode shows the synchronized data.
 	await go( '/?page_id=' + pageId );
@@ -159,12 +159,12 @@ const sleep = ( ms ) => new Promise( ( r ) => setTimeout( r, ms ) );
 	body = await text();
 	check( body.includes( 'are kept, and automatic sync is turned off' ), 'keep changes' );
 	check( body.includes( 'Off (only "Sync now")' ), 'status off' );
-	check( '0' === wp( `echo (int) TableRefresh\\Scheduler::count_events( ${ postId } );` ), 'no scheduled event after keep' );
+	check( '0' === wp( `echo (int) ArsenManukyan\\TableRefresh\\Scheduler::count_events( ${ postId } );` ), 'no scheduled event after keep' );
 
 	// 8. Resume automatic sync; the edit still needs a decision; replace it.
 	await page.click( 'input[name="enabled"]' );
 	await submitAndWait( '#submit' );
-	check( '1' === wp( `echo (int) TableRefresh\\Scheduler::count_events( ${ postId } );` ), 'resume: one scheduled event' );
+	check( '1' === wp( `echo (int) ArsenManukyan\\TableRefresh\\Scheduler::count_events( ${ postId } );` ), 'resume: one scheduled event' );
 	await submitAndWait( '.tablerefresh-sync-form button' );
 	check( ( await text() ).includes( 'This table was changed in TablePress' ), 'Sync now still stops at the edit' );
 	// Without confirmation the browser does not submit (required checkbox; the server also refuses, see AdminScreenTest).
@@ -181,16 +181,16 @@ const sleep = ( ms ) => new Promise( ( r ) => setTimeout( r, ms ) );
 	// 9. Pause and disable.
 	await page.click( 'input[name="enabled"]' );
 	await submitAndWait( '#submit' );
-	check( '0' === wp( `echo (int) TableRefresh\\Scheduler::count_events( ${ postId } );` ) && ( await text() ).includes( 'Off (only "Sync now")' ), 'disable automatic sync' );
+	check( '0' === wp( `echo (int) ArsenManukyan\\TableRefresh\\Scheduler::count_events( ${ postId } );` ) && ( await text() ).includes( 'Off (only "Sync now")' ), 'disable automatic sync' );
 	await page.click( 'input[name="enabled"]' );
 	await submitAndWait( '#submit' );
-	check( '1' === wp( `echo (int) TableRefresh\\Scheduler::count_events( ${ postId } );` ), 'enable again' );
+	check( '1' === wp( `echo (int) ArsenManukyan\\TableRefresh\\Scheduler::count_events( ${ postId } );` ), 'enable again' );
 	await shot( '06-settings-history' );
 
 	// 10. TablePress settings, ID, and shortcode are unchanged.
-	const optionsAfter = wp( `echo get_post_meta( TableRefresh\\TablePress_Adapter::get_post_id( '${ tableId }' ), '_tablepress_table_options', true );` );
+	const optionsAfter = wp( `echo get_post_meta( ArsenManukyan\\TableRefresh\\TablePress_Adapter::get_post_id( '${ tableId }' ), '_tablepress_table_options', true );` );
 	check( optionsBefore === optionsAfter, 'table options unchanged', optionsAfter.slice( 0, 80 ) );
-	check( tableId === wp( `echo TableRefresh\\TablePress_Adapter::get_table_id( ${ postId } );` ), 'table ID unchanged' );
+	check( tableId === wp( `echo ArsenManukyan\\TableRefresh\\TablePress_Adapter::get_table_id( ${ postId } );` ), 'table ID unchanged' );
 	await go( '/?page_id=' + pageId );
 	check( ( await page.content() ).includes( 'Alexandra' ), 'shortcode still renders the table' );
 

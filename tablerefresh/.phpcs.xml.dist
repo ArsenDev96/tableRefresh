@@ -31,7 +31,7 @@
 		<properties>
 			<property name="prefixes" type="array">
 				<element value="tablerefresh"/>
-				<element value="TableRefresh"/>
+				<element value="ArsenManukyan\TableRefresh"/>
 			</property>
 		</properties>
 	</rule>

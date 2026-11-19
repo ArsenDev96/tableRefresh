@@ -5,7 +5,7 @@
  * @package TableRefresh
  */
 
-namespace TableRefresh;
+namespace ArsenManukyan\TableRefresh;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -268,7 +268,11 @@ final class Admin {
 		echo '<div class="wrap tablerefresh">';
 		if ( ! TablePress_Adapter::is_available() ) {
 			echo '<h1>' . esc_html__( 'TableRefresh', 'tablerefresh' ) . '</h1>';
-			echo '<div class="notice notice-error inline"><p>' . esc_html( TablePress_Adapter::availability_error()->get_error_message() ) . '</p></div></div>';
+			echo '<div class="notice notice-error inline"><p>' . esc_html( Plugin::dependency_message() );
+			if ( current_user_can( 'activate_plugins' ) ) {
+				echo ' <a href="' . esc_url( admin_url( 'plugins.php' ) ) . '">' . esc_html__( 'Go to Plugins', 'tablerefresh' ) . '</a>';
+			}
+			echo '</p></div></div>';
 			return;
 		}
 		$action  = isset( $_GET['action'] ) ? sanitize_key( wp_unslash( $_GET['action'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Navigation only.

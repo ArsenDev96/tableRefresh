@@ -11,11 +11,11 @@
  * @package TableRefresh
  */
 
-use TableRefresh\Journal;
-use TableRefresh\Table_Lock;
+use ArsenManukyan\TableRefresh\Journal;
+use ArsenManukyan\TableRefresh\Table_Lock;
 
 /**
- * @covers \TableRefresh\Table_Updater
+ * @covers \ArsenManukyan\TableRefresh\Table_Updater
  */
 class TransactionLossTest extends Integration_Test_Case {
 

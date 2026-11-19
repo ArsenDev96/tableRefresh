@@ -60,7 +60,7 @@ const sleep = ( ms ) => new Promise( ( r ) => setTimeout( r, ms ) );
 	// A TablePress table to fill. Created through TablePress's model, not its "Add" screen: that screen
 	// opens the new table in the editor, and an open editor rightly holds automatic syncs for 15 minutes.
 	const tableId = wp( "wp_set_current_user( 1 ); $t = TablePress::$model_table->get_table_template(); $t['name'] = 'Class roster'; $t['data'] = array( array( '' ) ); $t['visibility'] = array( 'rows' => array( 1 ), 'columns' => array( 1 ) ); echo TablePress::$model_table->add( $t );" );
-	const postId = wp( `echo TableRefresh\\TablePress_Adapter::get_post_id( '${ tableId }' );` );
+	const postId = wp( `echo ArsenManukyan\\TableRefresh\\TablePress_Adapter::get_post_id( '${ tableId }' );` );
 
 	// 2: setting up the table.
 	await go( trPage + '&action=add' );
@@ -81,7 +81,7 @@ const sleep = ( ms ) => new Promise( ( r ) => setTimeout( r, ms ) );
 		await submitAndWait( '#submit' );
 		await expect( 'Settings saved.', 'save source' );
 	};
-	const scheduledSync = () => wp( `do_action( TableRefresh\\Scheduler::HOOK, ${ postId } ); echo TableRefresh\\Sync_Log::last( ${ postId } )['outcome'];` );
+	const scheduledSync = () => wp( `do_action( ArsenManukyan\\TableRefresh\\Scheduler::HOOK, ${ postId } ); echo ArsenManukyan\\TableRefresh\\Sync_Log::last( ${ postId } )['outcome'];` );
 	await setSource( SHEET_CHANGED );
 	if ( 'updated' !== scheduledSync() ) {
 		throw new Error( 'first scheduled sync did not update' );

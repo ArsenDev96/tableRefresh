@@ -5,10 +5,10 @@
  * @package TableRefresh
  */
 
-use TableRefresh\Csv_Parser;
+use ArsenManukyan\TableRefresh\Csv_Parser;
 
 /**
- * @covers \TableRefresh\Csv_Parser
+ * @covers \ArsenManukyan\TableRefresh\Csv_Parser
  */
 class CsvParserTest extends Integration_Test_Case {
 

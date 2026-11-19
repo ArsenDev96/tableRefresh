@@ -5,12 +5,12 @@
  * @package TableRefresh
  */
 
-use TableRefresh\Google_Sheets;
-use TableRefresh\URL_Guard;
+use ArsenManukyan\TableRefresh\Google_Sheets;
+use ArsenManukyan\TableRefresh\URL_Guard;
 
 /**
- * @covers \TableRefresh\URL_Guard
- * @covers \TableRefresh\Google_Sheets
+ * @covers \ArsenManukyan\TableRefresh\URL_Guard
+ * @covers \ArsenManukyan\TableRefresh\Google_Sheets
  */
 class UrlGuardTest extends Integration_Test_Case {
 

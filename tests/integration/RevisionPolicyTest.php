@@ -8,7 +8,7 @@
 require_once __DIR__ . '/RevisionGrowthMeasurement.php';
 
 /**
- * @covers \TableRefresh\Revision_Policy
+ * @covers \ArsenManukyan\TableRefresh\Revision_Policy
  */
 class RevisionPolicyTest extends Integration_Test_Case {
 	use Revision_Growth_Measurement;
@@ -86,9 +86,9 @@ class RevisionPolicyTest extends Integration_Test_Case {
 	 */
 	private function manual_revision_ids( string $table_id ): array {
 		global $wpdb;
-		$post_id = TableRefresh\TablePress_Adapter::get_post_id( $table_id );
+		$post_id = ArsenManukyan\TableRefresh\TablePress_Adapter::get_post_id( $table_id );
 		$all     = array_map( 'intval', $wpdb->get_col( $wpdb->prepare( "SELECT ID FROM {$wpdb->posts} WHERE post_parent = %d AND post_type = 'revision' ORDER BY ID", $post_id ) ) );
-		return array_values( array_diff( $all, TableRefresh\Revision_Policy::sync_revision_ids( $post_id ) ) );
+		return array_values( array_diff( $all, ArsenManukyan\TableRefresh\Revision_Policy::sync_revision_ids( $post_id ) ) );
 	}
 
 	public function test_manual_revisions_survive_a_site_wide_revision_limit() {
@@ -98,7 +98,7 @@ class RevisionPolicyTest extends Integration_Test_Case {
 		add_filter( 'tablerefresh_revisions_to_keep', $keep_two );
 		try {
 			$table_id = $this->create_table( array( array( 'start' ) ) );
-			$post_id  = TableRefresh\TablePress_Adapter::get_post_id( $table_id );
+			$post_id  = ArsenManukyan\TableRefresh\TablePress_Adapter::get_post_id( $table_id );
 			foreach ( array( 'm1', 'm2', 'm3' ) as $value ) {
 				$this->manual_save( $table_id, $value );
 			}
@@ -111,12 +111,12 @@ class RevisionPolicyTest extends Integration_Test_Case {
 				$this->assertSame( 'updated', $result['status'] );
 			}
 			$this->assertSame( $manual, $this->manual_revision_ids( $table_id ), 'Syncs must not delete manual revisions.' );
-			$this->assertCount( 2, TableRefresh\Revision_Policy::sync_revision_ids( $post_id ) );
+			$this->assertCount( 2, ArsenManukyan\TableRefresh\Revision_Policy::sync_revision_ids( $post_id ) );
 
 			// A later manual save is pruned by WordPress to the site limit for manual revisions only.
 			$this->manual_save( $table_id, 'm4' );
 			$this->assertCount( 3, $this->manual_revision_ids( $table_id ) );
-			$this->assertCount( 2, TableRefresh\Revision_Policy::sync_revision_ids( $post_id ), 'Sync revisions do not take manual slots.' );
+			$this->assertCount( 2, ArsenManukyan\TableRefresh\Revision_Policy::sync_revision_ids( $post_id ), 'Sync revisions do not take manual slots.' );
 		} finally {
 			remove_filter( 'wp_revisions_to_keep', $site_limit, 10 );
 			remove_filter( 'tablerefresh_revisions_to_keep', $keep_two );
@@ -141,13 +141,13 @@ class RevisionPolicyTest extends Integration_Test_Case {
 		for ( $i = 1; $i <= 7; $i++ ) {
 			$this->sync( $table_id, $this->fixture( 'p.csv', "p{$i}\n" ) );
 		}
-		$post_id = TableRefresh\TablePress_Adapter::get_post_id( $table_id );
-		$ids     = TableRefresh\Revision_Policy::sync_revision_ids( $post_id );
+		$post_id = ArsenManukyan\TableRefresh\TablePress_Adapter::get_post_id( $table_id );
+		$ids     = ArsenManukyan\TableRefresh\Revision_Policy::sync_revision_ids( $post_id );
 		$this->assertCount( 5, $ids );
 
 		$run = $this->run_cli( array( 'sync', $table_id, $this->fixture( 'p.csv', "failing\n" ) ), array( 'TABLEREFRESH_TEST_FAULT' => 'throw_after_post_update' ) );
 		$this->assertSame( 'tablerefresh_table_save_failed', $run['json']['code'] );
-		$this->assertSame( $ids, TableRefresh\Revision_Policy::sync_revision_ids( $post_id ) );
+		$this->assertSame( $ids, ArsenManukyan\TableRefresh\Revision_Policy::sync_revision_ids( $post_id ) );
 	}
 
 	/**
@@ -155,13 +155,13 @@ class RevisionPolicyTest extends Integration_Test_Case {
 	 */
 	public function test_recovery_before_and_after_retention_cleanup( bool $atomic ) {
 		$table_id = $this->create_table( array( array( 'start' ) ) );
-		$post_id  = TableRefresh\TablePress_Adapter::get_post_id( $table_id );
+		$post_id  = ArsenManukyan\TableRefresh\TablePress_Adapter::get_post_id( $table_id );
 		$this->manual_save( $table_id, 'manual' );
 		$manual = $this->manual_revision_ids( $table_id );
 		for ( $i = 1; $i <= 6; $i++ ) {
 			$this->sync( $table_id, $this->fixture( 'r.csv', "r{$i}\n" ), array( 'on_conflict' => 'overwrite' ) );
 		}
-		$kept   = TableRefresh\Revision_Policy::sync_revision_ids( $post_id );
+		$kept   = ArsenManukyan\TableRefresh\Revision_Policy::sync_revision_ids( $post_id );
 		$before = $this->raw_state( $table_id );
 		$this->assertCount( 5, $kept, 'Retention ran before the crash.' );
 
@@ -176,22 +176,22 @@ class RevisionPolicyTest extends Integration_Test_Case {
 		// The new data has another size, so the visibility meta is still pending at the crash.
 		$run = $this->run_cli( array( 'sync', $table_id, $this->fixture( 'r.csv', "crash,x\n" ) ), $env );
 		$this->assertStringContainsString( 'TEST FAULT: SIGKILL', $run['stderr'] );
-		$this->assertNotNull( TableRefresh\Journal::read( $table_id ) );
+		$this->assertNotNull( ArsenManukyan\TableRefresh\Journal::read( $table_id ) );
 		// With a transaction, the database discarded the revision with the rest of the write.
-		$this->assertCount( $atomic ? 5 : 6, TableRefresh\Revision_Policy::sync_revision_ids( $post_id ) );
+		$this->assertCount( $atomic ? 5 : 6, ArsenManukyan\TableRefresh\Revision_Policy::sync_revision_ids( $post_id ) );
 
 		sleep( 6 );
 		$recovered = $this->run_cli( array( 'recover', $table_id ) );
 		$this->assertSame( $atomic ? 'rolled_back' : 'restored', $recovered['json']['status'], $recovered['stdout'] . $recovered['stderr'] );
 		$this->assertSame( $before, $this->raw_state( $table_id ) );
-		$this->assertSame( $kept, TableRefresh\Revision_Policy::sync_revision_ids( $post_id ), 'Only the crashed write\'s revision was removed.' );
+		$this->assertSame( $kept, ArsenManukyan\TableRefresh\Revision_Policy::sync_revision_ids( $post_id ), 'Only the crashed write\'s revision was removed.' );
 		$this->assertSame( $manual, $this->manual_revision_ids( $table_id ) );
 
 		// The next successful sync applies retention again; manual revisions and the journal are unaffected.
 		$this->assertSame( 'updated', $this->sync( $table_id, $this->fixture( 'r.csv', "after\n" ) )['status'] );
-		$this->assertCount( 5, TableRefresh\Revision_Policy::sync_revision_ids( $post_id ) );
+		$this->assertCount( 5, ArsenManukyan\TableRefresh\Revision_Policy::sync_revision_ids( $post_id ) );
 		$this->assertSame( $manual, $this->manual_revision_ids( $table_id ) );
-		$this->assertNull( TableRefresh\Journal::read( $table_id ) );
+		$this->assertNull( ArsenManukyan\TableRefresh\Journal::read( $table_id ) );
 	}
 
 	public function atomicity(): array {

@@ -5,16 +5,16 @@
  * @package TableRefresh
  */
 
-use TableRefresh\Journal;
-use TableRefresh\Sync_Service;
-use TableRefresh\Sync_State;
-use TableRefresh\Table_Updater;
-use TableRefresh\TablePress_Adapter;
+use ArsenManukyan\TableRefresh\Journal;
+use ArsenManukyan\TableRefresh\Sync_Service;
+use ArsenManukyan\TableRefresh\Sync_State;
+use ArsenManukyan\TableRefresh\Table_Updater;
+use ArsenManukyan\TableRefresh\TablePress_Adapter;
 
 /**
- * @covers \TableRefresh\TablePress_Adapter::verify_post
- * @covers \TableRefresh\Table_Updater
- * @covers \TableRefresh\Journal
+ * @covers \ArsenManukyan\TableRefresh\TablePress_Adapter::verify_post
+ * @covers \ArsenManukyan\TableRefresh\Table_Updater
+ * @covers \ArsenManukyan\TableRefresh\Journal
  */
 class IntegrityGuardsTest extends Integration_Test_Case {
 

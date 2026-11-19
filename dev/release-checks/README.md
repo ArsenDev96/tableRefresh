@@ -24,6 +24,8 @@ Scripts used to verify a release candidate. They are not part of the plugin ZIP.
 - `rc3-results/`: focused checks of RC3 (a50494c), 2026-10-27.
 - `rc4-results/`: scheduling fix and focused checks of RC4 (a006c4f), 2026-10-28.
 - `rc5-results/`: compliance-audit fixes and focused checks of RC5 (209225e), 2026-10-28.
+- `rc6-results/`: WordPress.org review fixes (vendor namespace, scoped dependency notice) and checks of RC6
+  (f269c27), 2026-11-01.
 
 Coding standards and Plugin Check (no host PHP needed):
 

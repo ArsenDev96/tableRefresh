@@ -7,15 +7,15 @@
  * @package TableRefresh
  */
 
-use TableRefresh\Admin;
-use TableRefresh\Scheduler;
-use TableRefresh\Sync_Config;
-use TableRefresh\Sync_Log;
-use TableRefresh\Table_Lock;
-use TableRefresh\TablePress_Adapter;
+use ArsenManukyan\TableRefresh\Admin;
+use ArsenManukyan\TableRefresh\Scheduler;
+use ArsenManukyan\TableRefresh\Sync_Config;
+use ArsenManukyan\TableRefresh\Sync_Log;
+use ArsenManukyan\TableRefresh\Table_Lock;
+use ArsenManukyan\TableRefresh\TablePress_Adapter;
 
 /**
- * @covers \TableRefresh\Admin
+ * @covers \ArsenManukyan\TableRefresh\Admin
  */
 class AdminScreenTest extends Integration_Test_Case {
 
@@ -541,5 +541,64 @@ class AdminScreenTest extends Integration_Test_Case {
 		$this->assertSame( admin_url( 'admin.php?page=tablerefresh&action=edit&table=12' ), $response['location'] );
 		$this->assertSame( admin_url( 'admin.php?page=tablerefresh' ), $this->request( '/wp-admin/tools.php?page=tablerefresh', $cookie )['location'] );
 		$this->assertSame( 200, $this->request( '/wp-admin/tools.php', $cookie )['status'], 'The Tools screen itself is unaffected.' );
+	}
+
+	public function test_dependency_notice_only_on_the_plugins_screen() {
+		$cookie = $this->login_cookie();
+		$notice = 'requires the free TablePress plugin';
+		$this->assertStringNotContainsString( $notice, $this->request( '/wp-admin/plugins.php', $cookie )['body'], 'TablePress is active.' );
+
+		$active = (array) get_option( 'active_plugins' );
+		update_option( 'active_plugins', array_values( array_diff( $active, array( 'tablepress/tablepress.php' ) ) ) );
+		try {
+			foreach ( array( '/wp-admin/index.php', '/wp-admin/edit.php', '/wp-admin/options-general.php', '/wp-admin/tools.php' ) as $path ) {
+				$response = $this->request( $path, $cookie );
+				$this->assertSame( 200, $response['status'], $path );
+				$this->assertStringNotContainsString( $notice, $response['body'], $path );
+			}
+			$this->assertSame( 1, substr_count( $this->request( '/wp-admin/plugins.php', $cookie )['body'], $notice ), 'Plugins screen' );
+			$page = $this->page( $cookie );
+			$this->assertSame( 1, substr_count( $page, $notice ), 'Shown once on the TableRefresh screen, in place.' );
+			$this->assertStringContainsString( 'href="' . esc_url( admin_url( 'plugins.php' ) ) . '">Go to Plugins</a>', $page );
+		} finally {
+			update_option( 'active_plugins', $active );
+		}
+	}
+
+	public function test_attention_notice_only_on_the_dashboard_and_tablepress_screens() {
+		$table_id = $this->create_table( array( array( 'initial' ) ), array( 'name' => 'Prices' ) );
+		$post_id  = TablePress_Adapter::get_post_id( $table_id );
+		$config   = array(
+			'url'       => $this->fixture( 'source.csv', self::V1 ),
+			'frequency' => 'daily',
+			'enabled'   => true,
+			'attention' => Sync_Config::ATTENTION_FAILURES,
+			'failures'  => 5,
+		);
+		Sync_Config::save( $post_id, $config );
+		$cookie = $this->login_cookie();
+		$notice = 'TableRefresh: automatic sync is paused for 1 table and needs your decision.';
+
+		$screens = array(
+			'/wp-admin/index.php'                   => 1,
+			'/wp-admin/admin.php?page=tablepress'   => 1,
+			'/wp-admin/edit.php'                    => 0,
+			'/wp-admin/options-general.php'         => 0,
+			'/wp-admin/plugins.php'                 => 0,
+			'/wp-admin/admin.php?page=tablerefresh' => 0, // The list itself shows the paused table.
+		);
+		foreach ( $screens as $path => $expected ) {
+			$response = $this->request( $path, $cookie );
+			$this->assertSame( 200, $response['status'], $path );
+			$this->assertSame( $expected, substr_count( $response['body'], $notice ), $path );
+		}
+		$this->assertStringContainsString( $notice . ' <a href="' . esc_url( admin_url( 'admin.php?page=tablerefresh' ) ) . '">Review</a>', $this->request( '/wp-admin/index.php', $cookie )['body'] );
+
+		// Users who cannot manage the sync do not see it.
+		$this->assertStringNotContainsString( 'automatic sync is paused', $this->request( '/wp-admin/index.php', $this->login_cookie( $this->user( 'editor' ) ) )['body'] );
+
+		// It disappears once the table no longer needs a decision.
+		Sync_Config::save( $post_id, array( 'attention' => '' ) + $config );
+		$this->assertStringNotContainsString( 'automatic sync is paused', $this->request( '/wp-admin/index.php', $cookie )['body'] );
 	}
 }

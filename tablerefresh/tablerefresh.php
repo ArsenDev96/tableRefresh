@@ -39,7 +39,7 @@ require_once TABLEREFRESH_DIR . 'includes/class-sync-runner.php';
 require_once TABLEREFRESH_DIR . 'includes/class-scheduler.php';
 require_once TABLEREFRESH_DIR . 'includes/class-plugin.php';
 
-register_activation_hook( __FILE__, array( 'TableRefresh\Plugin', 'activate' ) );
-register_deactivation_hook( __FILE__, array( 'TableRefresh\Plugin', 'deactivate' ) );
+register_activation_hook( __FILE__, array( 'ArsenManukyan\TableRefresh\Plugin', 'activate' ) );
+register_deactivation_hook( __FILE__, array( 'ArsenManukyan\TableRefresh\Plugin', 'deactivate' ) );
 
-TableRefresh\Plugin::init();
+ArsenManukyan\TableRefresh\Plugin::init();

@@ -5,12 +5,12 @@
  * @package TableRefresh
  */
 
-use TableRefresh\TablePress_Adapter;
+use ArsenManukyan\TableRefresh\TablePress_Adapter;
 
 /**
- * @covers \TableRefresh\Sync_Service
- * @covers \TableRefresh\Table_Updater
- * @covers \TableRefresh\TablePress_Adapter
+ * @covers \ArsenManukyan\TableRefresh\Sync_Service
+ * @covers \ArsenManukyan\TableRefresh\Table_Updater
+ * @covers \ArsenManukyan\TableRefresh\TablePress_Adapter
  */
 class SyncTest extends Integration_Test_Case {
 

@@ -5,7 +5,7 @@
  * @package TableRefresh
  */
 
-namespace TableRefresh;
+namespace ArsenManukyan\TableRefresh;
 
 use WP_CLI;
 use WP_Error;
