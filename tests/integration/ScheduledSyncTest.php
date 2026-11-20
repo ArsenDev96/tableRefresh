@@ -578,7 +578,7 @@ class ScheduledSyncTest extends Integration_Test_Case {
 				$this->assertSame( 1, Scheduler::count_events( $post_id ) );
 				$this->assertGreaterThan( time(), Scheduler::next_run( $post_id ) );
 				$this->assertFalse( Table_Lock::is_locked( $table_id ) );
-				$this->assertNull( \TableRefresh\Journal::read( $table_id ) );
+				$this->assertNull( \ArsenManukyan\TableRefresh\Journal::read( $table_id ) );
 			}
 			$tables = $this->next_interval( $tables );
 		}
@@ -1046,7 +1046,7 @@ class ScheduledSyncTest extends Integration_Test_Case {
 		$this->run_wp_cron_php( $env + array( 'TABLEREFRESH_TEST_FAULT' => 'kill_after_post_update' ) );
 		$this->assertSame( array( 1, 0, 0 ), $this->sync_counts( $tables ), 'Nothing recorded for the interrupted sync.' );
 		$this->assertSame( 'initial', $this->load_table( $killed_table )['data'][0][0], 'The interrupted write was rolled back.' );
-		$this->assertNotNull( \TableRefresh\Journal::read( $killed_table ) );
+		$this->assertNotNull( \ArsenManukyan\TableRefresh\Journal::read( $killed_table ) );
 		$this->assertGreaterThan( time(), Scheduler::next_run( $killed ), 'Its turn is used up: next regular time.' );
 		$this->assertSame( $tables[2][2], Scheduler::next_run( $tables[2][1] ), 'The deferred table keeps its place.' );
 
@@ -1063,7 +1063,7 @@ class ScheduledSyncTest extends Integration_Test_Case {
 		$this->assertSame( array( 2, 1, 2 ), $this->sync_counts( $tables ) );
 		$this->assertSame( 'updated', Sync_Log::last( $killed )['outcome'] );
 		$this->assertSame( 'Item', $this->load_table( $killed_table )['data'][0][0] );
-		$this->assertNull( \TableRefresh\Journal::read( $killed_table ), 'Recovered.' );
+		$this->assertNull( \ArsenManukyan\TableRefresh\Journal::read( $killed_table ), 'Recovered.' );
 		$this->assertRegularTimesKept( $tables );
 	}
 
